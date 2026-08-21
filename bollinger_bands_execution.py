@@ -5,7 +5,6 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import boto3
-from dotenv import load_dotenv
 from kiteconnect import KiteConnect, KiteTicker
 import pandas as pd
 import numpy as np
@@ -13,12 +12,21 @@ import plotly.graph_objects as go
 import talib
 import requests
 
-load_dotenv()
-
 from brokers import make_broker
 
-# execution broker: "zerodha" (Kite, MKT orders) or "mastertrust" (Noren, marketable LMT)
-EXEC_BROKER = os.getenv("EXEC_BROKER", "zerodha")
+CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
+with open(CONFIG_PATH, "r") as f:
+    CONFIG = json.load(f)
+
+# execution broker: exactly one of config.json's "brokers" must be set to 1
+# - "zerodha" (Kite, MKT orders) or "mastertrust" (Noren, marketable LMT)
+_enabled_brokers = [name for name, flag in CONFIG.get("brokers", {}).items() if flag == 1]
+if len(_enabled_brokers) != 1:
+    raise RuntimeError(
+        f"config.json 'brokers' must have exactly one broker set to 1, "
+        f"got: {CONFIG.get('brokers')}"
+    )
+EXEC_BROKER = _enabled_brokers[0]
 
 IST = ZoneInfo("Asia/Kolkata")
 ZERODHA_SECRET_ID = "/trading/brokers/zerodha/luv"
@@ -69,11 +77,11 @@ def get_zerodha_secret():
         )
 
     secret = json.loads(response["SecretString"])
-    secret.setdefault("api_key", os.getenv("zerodha_api_key"))
+    secret.setdefault("api_key", CONFIG.get("zerodha_api_key"))
     if not secret.get("api_key") or not secret.get("access_token"):
         raise RuntimeError(
             f"Zerodha secret '{ZERODHA_SECRET_ID}' is missing api_key/access_token "
-            "(and no zerodha_api_key env var fallback was found)."
+            "(and no zerodha_api_key fallback was found in config.json)."
         )
     return secret
 
