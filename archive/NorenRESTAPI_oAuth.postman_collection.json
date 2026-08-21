@@ -1,0 +1,1697 @@
+{
+	"info": {
+		"_postman_id": "c096b58d-8ec8-453d-ac77-6a4983c71eb4",
+		"name": "NorenRESTAPI_oAuth",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "30010703"
+	},
+	"item": [
+		{
+			"name": "GenAccessToken",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"code\":\"db96c3dd-45c1-49b9-9fec-7ae82864ce98\",\"checksum\":\"1454f4a287c2584bb8b1d2c9854aef77489b5c0430ecec173106ec3df13c60\"}",
+					"options": {
+						"raw": {
+							"language": "text"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClient/GenAcsTok",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClient",
+						"GenAcsTok"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Forgot Password",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"pan\":\"{{PAN}}\", \"dob\":\"01012000\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/ForgotPassword",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"ForgotPassword"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Forgot Password OTP",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"pan\":\"{{PAN}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/FgtPwdOTP",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"FgtPwdOTP"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Change Password",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"oldpwd\":\"8776f108e247ab1e2b323042c049c266407c81fbad41bde1e8dfc1bb66fd267e\", \"pwd\":\"Abc@123\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/Changepwd",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"Changepwd"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "User Detail",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/UserDetails",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"UserDetails"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "ClientDetails",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"actid\":\"{{ACCT_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/ClientDetails",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"ClientDetails"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Watchlist Names",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/MWList",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"MWList"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Watchlist Scrips",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"wlname\":\"1\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/MarketWatch",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"MarketWatch"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Search Scrip",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"stext\":\"NIFTY JUN FUT\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/SearchScrip",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"SearchScrip"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Add Scrip To Watchlist",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"wlname\":\"7\",\"scrips\":\"NSE|11536\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/AddMultiScripsToMW",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"AddMultiScripsToMW"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "ReorderMWScrips",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"wlname\":\"test2\",\"scrips\":\"TCS-EQ\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/ReorderMWScrips",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"ReorderMWScrips"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Delete Scrip to Watch List",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"wlname\":\"6\",\"scrips\":\"NSE|22\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/DeleteMultiMWScrips",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"DeleteMultiMWScrips"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get SecurityInfo",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"exch\":\"NFO\", \"token\":\"35003\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetSecurityInfo",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetSecurityInfo"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetQuotes",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"exch\":\"NSE\", \"token\":\"22\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetQuotes",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetQuotes"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "PreDefinedMW",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"wlname\":\"NIFTY50\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/PreDefinedMW",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"PreDefinedMW"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "PreDefinedMWList",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/PreDefinedMWList",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"PreDefinedMWList"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "RenameMW",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"wlname\":\"TEST1\",\"newwlname\":\"TEST2\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/RenameMW",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"RenameMW"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Place Order",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"actid\":\"{{ACCT_ID}}\",\"exch\":\"NSE\",\"tsym\":\"ACC-EQ\",\"qty\":\"1\",\"prc\":\"0.0\",\"prd\":\"C\",\"trantype\":\"B\",\"prctyp\":\"MKT\",\"ret\":\"DAY\",\"remarks\":\"\",\"ordersource\":\"API\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/PlaceOrder",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"PlaceOrder"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Modify Order",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"exch\":\"NSE\",\"tsym\":\"ACC-EQ\",\"norenordno\":\"24080600000935\",\"qty\":\"50\",\"prc\":\"610\",\"prctyp\":\"LMT\",\"ordersource\":\"API\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/ModifyOrder",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"ModifyOrder"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Cancel Order",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"norenordno\":\"24052200001470\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/CancelOrder",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"CancelOrder"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "ExitSNOOrder",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"norenordno\":\"24052200001470\", \"prd\":\"C\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/ExitSNOOrder",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"ExitSNOOrder"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetOrderMargin",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"actid\":\"{{ACCT_ID}}\",\"exch\":\"NSE\",\"tsym\":\"RELIANCE-EQ\",\"qty\":\"1\",\"prc\":\"2000\",\"prd\":\"C\",\"trantype\":\"S\",\"prctyp\":\"LMT\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetOrderMargin",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetOrderMargin"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetBasketMargin",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"actid\":\"{{ACCT_ID}}\",\"exch\":\"NSE\",\"tsym\":\"RELIANCE-EQ\",\"qty\":\"1\",\"prc\":\"2000\",\"prd\":\"C\",\"trantype\":\"B\",\"prctyp\":\"LMT\",\"basketlists\":[{\"exch\":\"NSE\",\"tsym\":\"RELIANCE-EQ\",\"qty\":\"500\",\"prc\":\"2000\",\"prd\":\"C\",\"trantype\":\"B\",\"prctyp\":\"LMT\"},{\"exch\":\"NSE\",\"tsym\":\"ACC-EQ\",\"qty\":\"5\",\"prc\":\"2000\",\"prd\":\"M\",\"trantype\":\"B\",\"prctyp\":\"LMT\"}]}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetBasketMargin",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetBasketMargin"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "OrderBook",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/OrderBook",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"OrderBook"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "MultiLegOrderBook",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/MultiLegOrderBook",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"MultiLegOrderBook"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "SIngle order Hist",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"norenordno\":\"24052200001470\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/SingleOrdHist",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"SingleOrdHist"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "single ord status",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"actid\":\"{{ACCT_ID}}\",\"norenordno\":\"24052200001470\",\"exch\":\"NSE\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/SingleOrdStatus",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"SingleOrdStatus"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "TradeBook",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"actid\":\"{{ACCT_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/TradeBook",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"TradeBook"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "PositionBook",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"actid\":\"{{ACCT_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/PositionBook",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"PositionBook"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "InteropPosition book",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"actid\":\"{{USER_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/InteropPositionBook",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"InteropPositionBook"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Product Conversion",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"actid\":\"{{ACCT_ID}}\",\"exch\":\"BSE\",\"tsym\":\"BANKBARODA\",\"qty\":\"1\",\"prd\":\"M\",\"prevprd\":\"C\",\"trantype\":\"B\",\"postype\":\"DAY\",\"ordersource\":\"API\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/ProductConversion",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"ProductConversion"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetOrderReport",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"actid\":\"{{ACCT_ID}}\",\"from_date\":\"13-06-2024\",\"to_date\":\"13-06-2024\",\"brkname\":\"\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetOrderReport",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetOrderReport"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetTradeReport",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"actid\":\"{{ACCT_ID}}\",\"from_date\":\"13-06-2024\",\"to_date\":\"13-06-2024\", \"brkname\":\"\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetTradeReport",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetTradeReport"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Holdings",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"actid\":\"{{ACCT_ID}}\",\"prd\":\"C\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/Holdings",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"Holdings"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Holdings Conversion",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"actid\":\"{{ACCT_ID}}\",\"prd\":\"C\",\"holdqty\":\"10\",\"isin\":\"\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/HoldingsConv",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"HoldingsConv"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Limits",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"actid\":\"{{ACCT_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/Limits",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"Limits"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetSubLimits",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"actid\":\"{{ACCT_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetSubLimits",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetSubLimits"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetMaxPayoutAmount",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"actid\":\"{{ACCT_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetMaxPayoutAmount",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetMaxPayoutAmount"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "EODChartData",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"sym\":\"BSE:SENSEX\",\"from\":\"1715320068\",\"to\":\"1716184068\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/EODChartData",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"EODChartData"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "SpanCalc",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"actid\":\"{{ACCT_ID}}\",\"pos\":[{\"prd\":\"H\",\"exch\":\"NFO\",\"exd\":\"25-JUL-2024\",\"instname\":\"FUTIDX\",\"ls\":\"25\",\"optt\":\"XX\",\"symname\":\"NIFTY\",\"token\":\"35007\",\"tsym\":\"NIFTY25JUL24F\",\"ttype\":\"buy\",\"netqty\":\"50\"}]}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/SpanCalc",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"SpanCalc"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetIndexList",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"exch\":\"NSE\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetIndexList",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetIndexList"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetOptionChain",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"tsym\":\"ACC-EQ\", \"exch\":\"NSE\",\"strprc\":\"210.00\",\"cnt\":\"1\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetOptionChain",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetOptionChain"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetLinkedScrips",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"token\":\"22\", \"exch\":\"NSE\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetLinkedScrips",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetLinkedScrips"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "ExchMsg",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\",\"exch\":\"\",\"token\":\"\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/ExchMsg",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"ExchMsg"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetBrokerMsg",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetBrokerMsg",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetBrokerMsg"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetUnderlyingExchToken",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"token\":\"22\", \"exch\":\"NSE\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetUnderlyingExchToken",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetUnderlyingExchToken"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "ExchStatus",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"tsym\":\"ACC-EQ\", \"exch\":\"NSE\",\"strprc\":\"210.00\",\"cnt\":\"1\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/ExchStatus",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"ExchStatus"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "AMOStatusFlag",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"exch\":\"NSE\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/AMOStatusFlag",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"AMOStatusFlag"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "TPSeries",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"uid\":\"{{USER_ID}}\", \"exch\":\"NSE\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/TPSeries",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"TPSeries"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GetOptionGreek",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "fb4007b79cdab4ab2cd1af35a7e760fc4a6bd2edb4c018be6035c9dc189a01f9",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "jData={\"exd\":\"\", \"strprc\":\"\", \"sptprc\":\"\", \"int_rate\":\"\", \"volatility\":\"\"}"
+				},
+				"url": {
+					"raw": "http://{{Domain_Name}}/NorenWClientTP/GetOptionGreek",
+					"protocol": "http",
+					"host": [
+						"{{Domain_Name}}"
+					],
+					"path": [
+						"NorenWClientTP",
+						"GetOptionGreek"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "USER_ID",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "ACCT_ID",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "PASSWORD",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "PAN",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "jkey",
+			"value": "{{jkey}}",
+			"type": "default"
+		},
+		{
+			"key": "Domain_Name",
+			"value": "",
+			"type": "default"
+		}
+	]
+}
