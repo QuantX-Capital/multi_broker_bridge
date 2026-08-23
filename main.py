@@ -5,7 +5,6 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import boto3
-from dotenv import load_dotenv
 from kiteconnect import KiteConnect, KiteTicker
 import pandas as pd
 import numpy as np
@@ -13,7 +12,21 @@ import plotly.graph_objects as go
 import talib
 import requests
 
-load_dotenv()
+from brokers import make_broker
+
+CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
+with open(CONFIG_PATH, "r") as f:
+    CONFIG = json.load(f)
+
+# execution broker: exactly one of config.json's "brokers" must be set to 1
+# - "zerodha" (Kite, MKT orders) or "mastertrust" (Noren, marketable LMT)
+_enabled_brokers = [name for name, flag in CONFIG.get("brokers", {}).items() if flag == 1]
+if len(_enabled_brokers) != 1:
+    raise RuntimeError(
+        f"config.json 'brokers' must have exactly one broker set to 1, "
+        f"got: {CONFIG.get('brokers')}"
+    )
+EXEC_BROKER = _enabled_brokers[0]
 
 IST = ZoneInfo("Asia/Kolkata")
 ZERODHA_SECRET_ID = "/trading/brokers/zerodha/luv"
@@ -64,11 +77,11 @@ def get_zerodha_secret():
         )
 
     secret = json.loads(response["SecretString"])
-    secret.setdefault("api_key", os.getenv("zerodha_api_key"))
+    secret.setdefault("api_key", CONFIG.get("zerodha_api_key"))
     if not secret.get("api_key") or not secret.get("access_token"):
         raise RuntimeError(
             f"Zerodha secret '{ZERODHA_SECRET_ID}' is missing api_key/access_token "
-            "(and no zerodha_api_key env var fallback was found)."
+            "(and no zerodha_api_key fallback was found in config.json)."
         )
     return secret
 
@@ -104,6 +117,7 @@ def fetch_historical_data(kite, instrument_token, interval="5minute", days=4):
 
 
 kite = load_kite_client()
+broker = make_broker(EXEC_BROKER, kite=kite, tickers=list(TICKERS.keys()))
 data = {
     ticker: fetch_historical_data(kite, instrument_token=token, interval=interval)
     for ticker, token in TICKERS.items()
@@ -156,63 +170,69 @@ def make_candle_fig(df, title, log=None):
     return fig
 
 
-def write_chart_html(fig, ticker):
-    """Overwrite this ticker's chart file. The already-open browser tab picks
-    up the new content on its next auto-refresh (see REFRESH_SECONDS)."""
+def build_dashboard_html(figs):
+    """Combine per-ticker figures into one page: a dropdown toggles which
+    ticker's chart panel is visible. Selection is kept in localStorage so it
+    survives the page's own auto-refresh (meta refresh reloads the whole
+    page, which would otherwise reset the dropdown to the first ticker)."""
+    panels = []
+    options = []
+    for i, (ticker, fig) in enumerate(figs.items()):
+        include_js = "cdn" if i == 0 else False
+        chart_html = fig.to_html(include_plotlyjs=include_js, full_html=False)
+        active_class = " active" if i == 0 else ""
+        panels.append(f'<div id="tab-{ticker}" class="tab-panel{active_class}">{chart_html}</div>')
+        options.append(f'<option value="{ticker}">{ticker}</option>')
+
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="{REFRESH_SECONDS}">
+<title>Live Trading Dashboard</title>
+<style>
+  body {{ font-family: sans-serif; margin: 0; padding: 16px; }}
+  select {{ font-size: 16px; padding: 6px; margin-bottom: 12px; }}
+  .tab-panel {{ display: none; }}
+  .tab-panel.active {{ display: block; }}
+</style>
+</head>
+<body>
+<label for="ticker-select"><strong>Ticker:</strong></label>
+<select id="ticker-select" onchange="showTicker(this.value)">
+{''.join(options)}
+</select>
+{''.join(panels)}
+<script>
+function showTicker(ticker) {{
+  document.querySelectorAll('.tab-panel').forEach(function(el) {{ el.classList.remove('active'); }});
+  var panel = document.getElementById('tab-' + ticker);
+  if (panel) panel.classList.add('active');
+  try {{ localStorage.setItem('selectedTicker', ticker); }} catch (e) {{}}
+}}
+(function() {{
+  var saved = null;
+  try {{ saved = localStorage.getItem('selectedTicker'); }} catch (e) {{}}
+  var select = document.getElementById('ticker-select');
+  var options = Array.prototype.map.call(select.options, function(o) {{ return o.value; }});
+  var initial = (saved && options.indexOf(saved) !== -1) ? saved : options[0];
+  select.value = initial;
+  showTicker(initial);
+}})();
+</script>
+</body>
+</html>"""
+
+
+def write_dashboard_html(figs):
+    """Overwrite the combined dashboard file. The already-open browser tab
+    picks up the new content on its next auto-refresh (see REFRESH_SECONDS)."""
     CHARTS_DIR.mkdir(exist_ok=True)
-    path = CHARTS_DIR / f"{ticker}.html"
-    html = fig.to_html(include_plotlyjs="cdn", full_html=True)
-    html = html.replace("<head>", f'<head>\n<meta http-equiv="refresh" content="{REFRESH_SECONDS}">', 1)
-    path.write_text(html, encoding="utf-8")
+    path = CHARTS_DIR / "dashboard.html"
+    path.write_text(build_dashboard_html(figs), encoding="utf-8")
     return path
 
 
-
-
-def place_order(ticker, quantity, transaction_type):
-    order_id = kite.place_order(
-        variety=kite.VARIETY_REGULAR,
-        exchange=kite.EXCHANGE_NSE,
-        tradingsymbol=ticker.upper(),
-        transaction_type=transaction_type,
-        quantity=quantity,
-        product=kite.PRODUCT_MIS,
-        order_type=kite.ORDER_TYPE_MARKET,
-        validity=kite.VALIDITY_DAY,
-        market_protection=-1
-    )
-
-    return order_id
-
-
-def place_buy_order(ticker, quantity):
-    return place_order(
-        ticker=ticker,
-        quantity=quantity,
-        transaction_type=kite.TRANSACTION_TYPE_BUY
-    )
-
-
-def square_off(ticker, quantity):
-    return place_order(
-        ticker=ticker,
-        quantity=quantity,
-        transaction_type=kite.TRANSACTION_TYPE_SELL
-    )
-
-
-def positions(ticker):
-    daily_positions = kite.positions()["day"]
-    if not daily_positions:
-        return 0
-
-    positions_df = pd.DataFrame(daily_positions)[["tradingsymbol", "instrument_token", "product", "quantity", "last_price"]]
-    positions_df = positions_df[positions_df["tradingsymbol"] == ticker.upper()]
-
-    if positions_df.empty:
-        return 0
-
-    return positions_df["quantity"].to_list()[0]
 
 
 import numpy as np
@@ -337,7 +357,7 @@ class LONGSTRATEGY:
         if status["close"] >= status["bb_upper"]:
             print(f"[{self.ticker}] touched UPPER band")
 
-        active_positions = positions(self.ticker)
+        active_positions = broker.net_position(self.ticker)
         action = "NONE"
 
         # resync if the position was closed outside this loop
@@ -352,18 +372,18 @@ class LONGSTRATEGY:
 
             if status["exit_conditions"] == -1:
                 print(f"[{self.ticker}] EXIT {active_positions}")
-                square_off(self.ticker, active_positions)
-                # TODO: confirm fill before resetting
-                self.enteries_taken = 0
-                action = "EXIT"
+                order_id = broker.sell(self.ticker, active_positions)
+                if order_id:
+                    self.enteries_taken = 0
+                    action = "EXIT"
 
             elif (self.enteries_taken < self.max_entries
                   and status["add_position"] == 1):
                 print(f"[{self.ticker}] ADD rung {self.enteries_taken + 1}")
-                place_buy_order(self.ticker, self.quantity)
-                # TODO: confirm fill before incrementing
-                self.enteries_taken += 1
-                action = "ADD"
+                order_id = broker.buy(self.ticker, self.quantity)
+                if order_id:
+                    self.enteries_taken += 1
+                    action = "ADD"
 
         else:
             # Use the raw band touch, not the "fresh_entry" signal state, since
@@ -374,10 +394,10 @@ class LONGSTRATEGY:
             # fresh_entry on top of it can permanently lock out a flat ticker.
             if status["entry_conditions"] == 1:
                 print(f"[{self.ticker}] FRESH ENTRY")
-                place_buy_order(self.ticker, self.quantity)
-                # TODO: confirm fill before setting
-                self.enteries_taken = 1
-                action = "ENTRY"
+                order_id = broker.buy(self.ticker, self.quantity)
+                if order_id:
+                    self.enteries_taken = 1
+                    action = "ENTRY"
 
         self._log_bar(bar_time, status, action)
 
@@ -412,26 +432,34 @@ strategies = {
     for ticker, token in TICKERS.items()
 }
 
-def update_chart(ticker, df, log=None):
-    """(Re)write this ticker's chart file with the latest bars/signals."""
-    fig = make_candle_fig(df, ticker, log=log)
-    return write_chart_html(fig, ticker)
+def refresh_dashboard():
+    """Rebuild every ticker's chart from current state and rewrite the
+    combined dashboard file."""
+    figs = {}
+    for token in instrument_tokens:
+        ticker = token_to_ticker[token]
+        strategy = strategies[token]
+        if strategy.df is not None:
+            figs[ticker] = make_candle_fig(strategy.df, ticker, log=strategy.log)
+        else:
+            figs[ticker] = make_candle_fig(ba.state[token]["historical_df"], ticker)
+    return write_dashboard_html(figs)
 
-# seed one chart per ticker up front and open each in a browser tab; every
-# tab then auto-refreshes (REFRESH_SECONDS) and picks up rewrites below
-for token in instrument_tokens:
-    ticker = token_to_ticker[token]
-    path = update_chart(ticker, ba.state[token]["historical_df"])
-    webbrowser.open(path.resolve().as_uri())
+# seed the dashboard up front and open it in a single browser tab; the tab
+# then auto-refreshes (REFRESH_SECONDS) and picks up rewrites below
+dashboard_path = refresh_dashboard()
+webbrowser.open(dashboard_path.resolve().as_uri())
 
 def on_ticks(ws, ticks):
+    updated = False
     for tick in ticks:
         result = ba.create_bar(tick, kite)
         if result is not None:
             token, bar_df = result
-            ticker = token_to_ticker[token]
-            strategy = strategies[token].on_event(bar_df)
-            update_chart(ticker, strategy.df, strategy.log)
+            strategies[token].on_event(bar_df)
+            updated = True
+    if updated:
+        refresh_dashboard()
 
 def on_connect(ws, response):
     ws.subscribe(instrument_tokens)
@@ -453,5 +481,4 @@ except KeyboardInterrupt:
 finally:
     for strategy in strategies.values():
         strategy.save_log()
-        if strategy.df is not None and strategy.log:
-            update_chart(strategy.ticker, strategy.df, strategy.log)
+    refresh_dashboard()
