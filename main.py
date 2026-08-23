@@ -31,7 +31,7 @@ EXEC_BROKER = _enabled_brokers[0]
 IST = ZoneInfo("Asia/Kolkata")
 ZERODHA_SECRET_ID = "/trading/brokers/zerodha/luv"
 
-CHARTS_DIR = Path("charts")
+CHARTS_DIR = Path(__file__).resolve().parent / "charts"
 # Browser tab reload cadence. Independent of the bar interval - the HTML file
 # itself is only rewritten when a bar actually closes, this just controls how
 # soon the open tab picks up a rewritten file.
@@ -445,10 +445,15 @@ def refresh_dashboard():
             figs[ticker] = make_candle_fig(ba.state[token]["historical_df"], ticker)
     return write_dashboard_html(figs)
 
-# seed the dashboard up front and open it in a single browser tab; the tab
-# then auto-refreshes (REFRESH_SECONDS) and picks up rewrites below
+# seed the dashboard up front. Locally this opens a browser tab that then
+# auto-refreshes (REFRESH_SECONDS) and picks up rewrites below; on a headless
+# server there's no browser to open, so just print the path and move on.
 dashboard_path = refresh_dashboard()
-webbrowser.open(dashboard_path.resolve().as_uri())
+print(f"Dashboard: {dashboard_path.resolve()}")
+try:
+    webbrowser.open(dashboard_path.resolve().as_uri())
+except webbrowser.Error:
+    pass
 
 def on_ticks(ws, ticks):
     updated = False

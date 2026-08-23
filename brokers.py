@@ -29,7 +29,10 @@ import requests
 IST = ZoneInfo("Asia/Kolkata")
 
 NOREN_SECRET_ID = "/trading/brokers/mastertrust/vaibhav"
-NOREN_AWS_PROFILE = "broker-secrets"
+# Local dev uses a named AWS CLI profile; on EC2 there's no such profile, so
+# leave NOREN_AWS_PROFILE unset there and boto3 falls back to the instance's
+# attached IAM role instead.
+NOREN_AWS_PROFILE = os.environ.get("NOREN_AWS_PROFILE")
 NOREN_AWS_REGION = "ap-south-1"
 NOREN_BASE_URL = "https://midlive.mastertrust.co.in/NorenWClientAPI/"
 
