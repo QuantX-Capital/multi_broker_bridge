@@ -37,7 +37,7 @@ CHARTS_DIR = Path(__file__).resolve().parent / "charts"
 # soon the open tab picks up a rewritten file.
 REFRESH_SECONDS = 60
 
-interval = "5minute"
+interval = "15minute"
 days = 3
 
 # ticker -> instrument_token. Add more entries here to trade multiple tickers at once.
