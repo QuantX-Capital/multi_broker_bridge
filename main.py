@@ -175,14 +175,15 @@ def make_candle_fig(df, title, log=None):
     if log:
         log_df = pd.DataFrame(log).set_index("timestamp")
         for action, color, symbol, price_col, offset in [
-            ("ENTRY", "green", "triangle-up", "low", 0.995),
-            ("EXIT", "red", "triangle-down", "high", 1.005),
+            ("ENTRY", "yellow", "triangle-up", "low", 0.998),
+            ("EXIT", "red", "triangle-down", "high", 1.002),
         ]:
             times = log_df.index[log_df["action"] == action].intersection(df_bb.index)
             if len(times):
                 fig.add_trace(go.Scatter(
                     x=times, y=df_bb.loc[times, price_col] * offset,
-                    mode="markers", marker=dict(symbol=symbol, size=12, color=color),
+                    mode="markers",
+                    marker=dict(symbol=symbol, size=22, color=color, line=dict(color="white", width=1)),
                     name=action,
                 ))
 
