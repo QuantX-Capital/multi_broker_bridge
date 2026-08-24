@@ -189,10 +189,14 @@ def make_candle_fig(df, title, log=None):
     today = datetime.now(tz=IST).date()
     session_start = datetime.combine(today, time(9, 15), tzinfo=IST)
     session_end = datetime.combine(today, time(15, 30), tzinfo=IST)
+    # pad both edges by half a bar so the first/last candle isn't clipped -
+    # a candle is drawn centered on its timestamp, so one sitting exactly on
+    # the range boundary only shows its right (or left) half
+    pad = timedelta(minutes=2, seconds=30)
 
-    fig.update_layout(title=title, xaxis_rangeslider_visible=False, template="plotly_white", autosize=True)
+    fig.update_layout(title=title, xaxis_rangeslider_visible=False, template="plotly_dark", autosize=True)
     fig.update_xaxes(
-        range=[session_start, session_end],
+        range=[session_start - pad, session_end + pad],
         rangebreaks=[
             dict(bounds=[16.00, 8.00], pattern="hour"),  # hide 15:30 -> next day's 09:15
             dict(bounds=["sat", "mon"]),                # hide weekends
@@ -227,9 +231,9 @@ def build_dashboard_html(figs):
 <title>Live Trading Dashboard</title>
 <style>
   html, body {{ height: 100%; margin: 0; }}
-  body {{ font-family: sans-serif; display: flex; flex-direction: column; }}
+  body {{ font-family: sans-serif; display: flex; flex-direction: column; background: #111418; color: #e6e6e6; }}
   .header {{ flex: 0 0 auto; padding: 12px 16px; }}
-  select {{ font-size: 16px; padding: 6px; }}
+  select {{ font-size: 16px; padding: 6px; background: #1e2229; color: #e6e6e6; border: 1px solid #3a3f47; }}
   .tab-panel {{ display: none; flex: 1 1 auto; min-height: 0; }}
   .tab-panel.active {{ display: block; }}
   .tab-panel > div {{ width: 100% !important; height: 100% !important; }}
