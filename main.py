@@ -3,6 +3,7 @@ import os
 import webbrowser
 from pathlib import Path
 from datetime import datetime, timedelta, time
+from time import sleep
 from zoneinfo import ZoneInfo
 import boto3
 from kiteconnect import KiteConnect, KiteTicker
@@ -529,11 +530,17 @@ kws.on_ticks = on_ticks
 kws.on_connect = on_connect
 kws.on_close = on_close
 
-# kws.connect() blocks until the ws is stopped (manual interrupt, ws.stop(), or a
-# fatal error). Whenever that happens, treat it as "the bot stopped" and flush
-# whatever bars are sitting in memory to CSV for every ticker.
+# kws.connect() blocks until the ws disconnects (network drop, ws.stop(), or a
+# fatal error) and then simply returns - it does not raise on an ordinary
+# disconnect. Loop around it so a dropped connection reconnects in-process
+# instead of relying on systemd to restart the whole script, which would
+# otherwise wipe in-memory state (entries_taken, bar log) for every ticker on
+# every disconnect.
 try:
-    kws.connect()
+    while True:
+        kws.connect()
+        print("WebSocket disconnected, reconnecting in 5s...")
+        sleep(5)
 except KeyboardInterrupt:
     print("Bot stopped manually (KeyboardInterrupt)")
 finally:
