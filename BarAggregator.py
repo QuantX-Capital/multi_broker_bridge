@@ -29,7 +29,7 @@ class BarAggregator:
         chart has data to show before the first live tick/boundary arrives."""
         for token, s in self.state.items():
             if s["historical_df"] is None:
-                s["historical_df"] = fetch_historical_data(kite, token, interval="15minute").iloc[:-1]
+                s["historical_df"] = fetch_historical_data(kite, token, interval="5minute").iloc[:-1]
 
     def create_bar(self, tick, kite):
         if "last_price" not in tick:
@@ -55,10 +55,10 @@ class BarAggregator:
             s["open_volume"] = tick["volume_traded"]
             return None
 
-        if current_minute != s["previous_minute"] and int(current_minute) % 15 == 0 and avoid_time != "09-15":
+        if current_minute != s["previous_minute"] and int(current_minute) % 5 == 0 and avoid_time != "09-15":
             # Fetch historical data at the first bar boundary so it includes all bars up to this point
             if s["historical_df"] is None:
-                s["historical_df"] = fetch_historical_data(kite, token, interval="15minute").iloc[:-1]
+                s["historical_df"] = fetch_historical_data(kite, token, interval="5minute").iloc[:-1]
                 s["previous_minute"] = current_minute
                 s["bar_start_time"] = dt.replace(second=0, microsecond=0)
                 s["open"] = s["highest_close"] = s["lowest_close"] = s["close"] = current_ltp
