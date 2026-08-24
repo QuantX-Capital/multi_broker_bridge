@@ -499,7 +499,7 @@ def on_connect(ws, response):
     ws.subscribe(instrument_tokens)
 
 def on_close(ws, code, reason):
-    ws.stop()
+    print(f"Connection closed: {code} - {reason}")
 
 kws.on_ticks = on_ticks
 kws.on_connect = on_connect
