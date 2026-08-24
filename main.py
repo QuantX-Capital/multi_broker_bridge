@@ -2,7 +2,7 @@ import json
 import os
 import webbrowser
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from zoneinfo import ZoneInfo
 import boto3
 from kiteconnect import KiteConnect, KiteTicker
@@ -166,7 +166,18 @@ def make_candle_fig(df, title, log=None):
                     name=action,
                 ))
 
-    fig.update_layout(title=title, xaxis_rangeslider_visible=False, template="plotly_white")
+    today = datetime.now(tz=IST).date()
+    session_start = datetime.combine(today, time(9, 15), tzinfo=IST)
+    session_end = datetime.combine(today, time(15, 30), tzinfo=IST)
+
+    fig.update_layout(title=title, xaxis_rangeslider_visible=False, template="plotly_white", autosize=True)
+    fig.update_xaxes(
+        range=[session_start, session_end],
+        rangebreaks=[
+            dict(bounds=[16.00, 8.00], pattern="hour"),  # hide 15:30 -> next day's 09:15
+            dict(bounds=["sat", "mon"]),                # hide weekends
+        ],
+    )
     return fig
 
 
@@ -179,7 +190,11 @@ def build_dashboard_html(figs):
     options = []
     for i, (ticker, fig) in enumerate(figs.items()):
         include_js = "cdn" if i == 0 else False
-        chart_html = fig.to_html(include_plotlyjs=include_js, full_html=False)
+        chart_html = fig.to_html(
+            include_plotlyjs=include_js, full_html=False,
+            default_width="100%", default_height="100%",
+            config={"responsive": True},
+        )
         active_class = " active" if i == 0 else ""
         panels.append(f'<div id="tab-{ticker}" class="tab-panel{active_class}">{chart_html}</div>')
         options.append(f'<option value="{ticker}">{ticker}</option>')
@@ -191,23 +206,37 @@ def build_dashboard_html(figs):
 <meta http-equiv="refresh" content="{REFRESH_SECONDS}">
 <title>Live Trading Dashboard</title>
 <style>
-  body {{ font-family: sans-serif; margin: 0; padding: 16px; }}
-  select {{ font-size: 16px; padding: 6px; margin-bottom: 12px; }}
-  .tab-panel {{ display: none; }}
+  html, body {{ height: 100%; margin: 0; }}
+  body {{ font-family: sans-serif; display: flex; flex-direction: column; }}
+  .header {{ flex: 0 0 auto; padding: 12px 16px; }}
+  select {{ font-size: 16px; padding: 6px; }}
+  .tab-panel {{ display: none; flex: 1 1 auto; min-height: 0; }}
   .tab-panel.active {{ display: block; }}
+  .tab-panel > div {{ width: 100% !important; height: 100% !important; }}
 </style>
 </head>
 <body>
+<div class="header">
 <label for="ticker-select"><strong>Ticker:</strong></label>
 <select id="ticker-select" onchange="showTicker(this.value)">
 {''.join(options)}
 </select>
+</div>
 {''.join(panels)}
 <script>
 function showTicker(ticker) {{
   document.querySelectorAll('.tab-panel').forEach(function(el) {{ el.classList.remove('active'); }});
   var panel = document.getElementById('tab-' + ticker);
-  if (panel) panel.classList.add('active');
+  if (panel) {{
+    panel.classList.add('active');
+    // Panels other than the first are drawn by Plotly while still display:none,
+    // so they come out at a small fallback size. Force a resize now that the
+    // panel is actually visible and has real dimensions.
+    var plot = panel.querySelector('.plotly-graph-div');
+    if (plot && window.Plotly) {{
+      setTimeout(function() {{ Plotly.Plots.resize(plot); }}, 0);
+    }}
+  }}
   try {{ localStorage.setItem('selectedTicker', ticker); }} catch (e) {{}}
 }}
 (function() {{
