@@ -128,8 +128,29 @@ for ticker, df in data.items():
 
 
 
+def fetch_trade_markers(kite):
+    """Today's real fills from Kite, grouped by ticker and snapped to the bar
+    they fall in (a fill lands mid-bar, e.g. 11:00:55, but the chart only has
+    one candle per 5min, e.g. 11:00 - so round down to line up with it).
+    BUY -> ENTRY marker, SELL -> EXIT marker; no ADD distinction, every buy
+    is drawn the same way. Source of truth is the broker, not the bot's own
+    memory, so this picks up trades placed manually as well as by the bot,
+    and survives bot restarts."""
+    markers = {ticker: [] for ticker in TICKERS}
+    for trade in kite.trades():
+        ticker = trade["tradingsymbol"]
+        if ticker not in markers:
+            continue
+        bar_time = trade["fill_timestamp"].replace(second=0, microsecond=0)
+        bar_time -= timedelta(minutes=bar_time.minute % 5)
+        bar_time = bar_time.replace(tzinfo=IST)
+        action = "ENTRY" if trade["transaction_type"] == "BUY" else "EXIT"
+        markers[ticker].append({"timestamp": bar_time, "action": action})
+    return markers
+
+
 def make_candle_fig(df, title, log=None):
-    """Candlestick + Bollinger bands, with ENTRY/ADD/EXIT markers if a bar log is given.
+    """Candlestick + Bollinger bands, with ENTRY/EXIT markers if a bar log is given.
     Bands are recomputed here so this works on both raw historical data (no bb_
     columns yet) and a strategy's already-annotated df."""
     df_bb = df.copy()
@@ -155,7 +176,6 @@ def make_candle_fig(df, title, log=None):
         log_df = pd.DataFrame(log).set_index("timestamp")
         for action, color, symbol, price_col, offset in [
             ("ENTRY", "green", "triangle-up", "low", 0.995),
-            ("ADD", "limegreen", "triangle-up", "low", 0.99),
             ("EXIT", "red", "triangle-down", "high", 1.005),
         ]:
             times = log_df.index[log_df["action"] == action].intersection(df_bb.index)
@@ -464,14 +484,13 @@ strategies = {
 def refresh_dashboard():
     """Rebuild every ticker's chart from current state and rewrite the
     combined dashboard file."""
+    trade_markers = fetch_trade_markers(kite)
     figs = {}
     for token in instrument_tokens:
         ticker = token_to_ticker[token]
         strategy = strategies[token]
-        if strategy.df is not None:
-            figs[ticker] = make_candle_fig(strategy.df, ticker, log=strategy.log)
-        else:
-            figs[ticker] = make_candle_fig(ba.state[token]["historical_df"], ticker)
+        df = strategy.df if strategy.df is not None else ba.state[token]["historical_df"]
+        figs[ticker] = make_candle_fig(df, ticker, log=trade_markers[ticker])
     return write_dashboard_html(figs)
 
 # seed the dashboard up front. Locally this opens a browser tab that then
