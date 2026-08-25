@@ -1,7 +1,7 @@
 {
     "brokers": {
-        "zerodha": 1,
-        "mastertrust": 0
+        "zerodha": 0,
+        "mastertrust": 1
     },
     "zerodha_api_key": ""
 }
