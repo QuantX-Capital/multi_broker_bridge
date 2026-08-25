@@ -38,6 +38,12 @@ CHARTS_DIR = Path(__file__).resolve().parent / "charts"
 # soon the open tab picks up a rewritten file.
 REFRESH_SECONDS = 60
 
+# Exit everything ourselves ahead of the broker's own MIS auto square-off
+# (which can land anywhere in a ~15:15-15:25 window on a blunt market order
+# and cost real slippage/charges) so exits happen on our terms, earlier and
+# more predictably.
+SQUAREOFF_TIME = time(15, 10)
+
 interval = "5minute"
 days = 3
 
@@ -307,6 +313,7 @@ class LONGSTRATEGY:
         self.enteries_taken = 0
         self.df = None
         self.log = []   # one row per closed bar, kept in memory while the bot runs
+        self.enabled = True   # set False after the daily square-off to block new entries
 
     # ---------- indicators ----------
     def add_bollinger_bands(self):
@@ -432,7 +439,8 @@ class LONGSTRATEGY:
                     self.enteries_taken = 0
                     action = "EXIT"
 
-            elif (self.enteries_taken < self.max_entries
+            elif (self.enabled
+                  and self.enteries_taken < self.max_entries
                   and status["add_position"] == 1):
                 print(f"[{self.ticker}] ADD rung {self.enteries_taken + 1}")
                 order_id = broker.buy(self.ticker, self.quantity)
@@ -447,7 +455,7 @@ class LONGSTRATEGY:
             # started (no upper-band close since). active_positions == 0 is
             # already the real guard against double-entering, so requiring
             # fresh_entry on top of it can permanently lock out a flat ticker.
-            if status["entry_conditions"] == 1:
+            if self.enabled and status["entry_conditions"] == 1:
                 print(f"[{self.ticker}] FRESH ENTRY")
                 order_id = broker.buy(self.ticker, self.quantity)
                 if order_id:
@@ -509,8 +517,31 @@ try:
 except webbrowser.Error:
     pass
 
+squared_off_today = False
+
+def square_off_all():
+    """Exit every open position across all tracked tickers, regardless of
+    broker, and stop the strategies from taking new entries for the rest of
+    the day. Reads real broker positions (not the bot's own memory), so this
+    also catches positions opened manually - same as the chart markers."""
+    global squared_off_today
+    squared_off_today = True
+    print(f"=== {SQUAREOFF_TIME} cutoff reached, squaring off all positions ===")
+    for token, ticker in token_to_ticker.items():
+        qty = broker.net_position(ticker)
+        if qty > 0:
+            print(f"[{ticker}] SQUARE-OFF: selling {qty}")
+            broker.sell(ticker, qty)
+        strategies[token].enteries_taken = 0
+        strategies[token].enabled = False
+
 def on_ticks(ws, ticks):
     updated = False
+
+    if not squared_off_today and datetime.now(tz=IST).time() >= SQUAREOFF_TIME:
+        square_off_all()
+        updated = True
+
     for tick in ticks:
         result = ba.create_bar(tick, kite)
         if result is not None:
