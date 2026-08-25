@@ -95,6 +95,17 @@ class KiteBroker:
                 return int(p["quantity"])
         return 0
 
+    def trades(self):
+        """Today's fills, normalized to {tsym, transaction_type, fill_timestamp}."""
+        return [
+            {
+                "tsym": t["tradingsymbol"],
+                "transaction_type": t["transaction_type"],
+                "fill_timestamp": t["fill_timestamp"],
+            }
+            for t in self.kite.trades()
+        ]
+
 
 class NorenBroker:
     """Mastertrust Noren REST execution. Data still comes from Zerodha."""
@@ -257,6 +268,21 @@ class NorenBroker:
             if p.get("tsym") == scrip["tsym"] and p.get("prd") == "I":
                 return int(p.get("netqty", 0))
         return 0
+
+    def trades(self):
+        """Today's fills, normalized to {tsym, transaction_type, fill_timestamp}
+        to match KiteBroker.trades(). exch_tm is the exchange fill time as a
+        naive IST wall-clock string, e.g. '25-08-2026 14:05:00'."""
+        book = self._call("TradeBook", tolerate_no_data=True)
+        out = []
+        for t in book:
+            tsym = t["tsym"][:-3] if t["tsym"].endswith("-EQ") else t["tsym"]
+            out.append({
+                "tsym": tsym,
+                "transaction_type": "BUY" if t["trantype"] == "B" else "SELL",
+                "fill_timestamp": datetime.strptime(t["exch_tm"], "%d-%m-%Y %H:%M:%S"),
+            })
+        return out
 
 
 def make_broker(name, kite=None, tickers=None):

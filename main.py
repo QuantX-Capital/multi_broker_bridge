@@ -129,17 +129,17 @@ for ticker, df in data.items():
 
 
 
-def fetch_trade_markers(kite):
-    """Today's real fills from Kite, grouped by ticker and snapped to the bar
-    they fall in (a fill lands mid-bar, e.g. 11:00:55, but the chart only has
-    one candle per 5min, e.g. 11:00 - so round down to line up with it).
-    BUY -> ENTRY marker, SELL -> EXIT marker; no ADD distinction, every buy
-    is drawn the same way. Source of truth is the broker, not the bot's own
-    memory, so this picks up trades placed manually as well as by the bot,
-    and survives bot restarts."""
+def fetch_trade_markers(broker):
+    """Today's real fills from the active broker (whichever one EXEC_BROKER
+    selected), grouped by ticker and snapped to the bar they fall in (a fill
+    lands mid-bar, e.g. 11:00:55, but the chart only has one candle per 5min,
+    e.g. 11:00 - so round down to line up with it). BUY -> ENTRY marker,
+    SELL -> EXIT marker; no ADD distinction, every buy is drawn the same way.
+    Source of truth is the broker, not the bot's own memory, so this picks up
+    trades placed manually as well as by the bot, and survives bot restarts."""
     markers = {ticker: [] for ticker in TICKERS}
-    for trade in kite.trades():
-        ticker = trade["tradingsymbol"]
+    for trade in broker.trades():
+        ticker = trade["tsym"]
         if ticker not in markers:
             continue
         bar_time = trade["fill_timestamp"].replace(second=0, microsecond=0)
@@ -490,7 +490,7 @@ strategies = {
 def refresh_dashboard():
     """Rebuild every ticker's chart from current state and rewrite the
     combined dashboard file."""
-    trade_markers = fetch_trade_markers(kite)
+    trade_markers = fetch_trade_markers(broker)
     figs = {}
     for token in instrument_tokens:
         ticker = token_to_ticker[token]
