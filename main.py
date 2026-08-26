@@ -14,6 +14,9 @@ import talib
 import requests
 
 from brokers import make_broker
+from logger import enable_file_logging
+
+enable_file_logging()
 
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 with open(CONFIG_PATH, "r") as f:
