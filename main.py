@@ -139,16 +139,14 @@ for ticker, df in data.items():
 
 
 
-def fetch_trade_markers(broker):
-    """Today's real fills from the active broker (whichever one EXEC_BROKER
-    selected), grouped by ticker and snapped to the bar they fall in (a fill
-    lands mid-bar, e.g. 11:00:55, but the chart only has one candle per 5min,
-    e.g. 11:00 - so round down to line up with it). BUY -> ENTRY marker,
-    SELL -> EXIT marker; no ADD distinction, every buy is drawn the same way.
-    Source of truth is the broker, not the bot's own memory, so this picks up
-    trades placed manually as well as by the bot, and survives bot restarts."""
+def fetch_trade_markers(fills):
+    """Group today's fills (already fetched from the active broker) by
+    ticker and snap each to the bar it falls in (a fill lands mid-bar, e.g.
+    11:00:55, but the chart only has one candle per 5min, e.g. 11:00 - so
+    round down to line up with it). BUY -> ENTRY marker, SELL -> EXIT
+    marker; no ADD distinction, every buy is drawn the same way."""
     markers = {ticker: [] for ticker in TICKERS}
-    for trade in broker.trades():
+    for trade in fills:
         ticker = trade["tsym"]
         if ticker not in markers:
             continue
@@ -268,7 +266,9 @@ def _num(v, nd=2):
 def build_panel_html(positions, fills):
     """Inner HTML for the resizable bottom panel, in three parts:
 
-      POSITIONS    - current net qty per ticker (broker truth)
+      POSITIONS    - every position currently open on the account (broker
+                     truth, not just the tracked tickers), dealer-grid style:
+                     buy/sell qty & avg price, net qty, net avg, carry-forward
       FILLS TODAY  - one wide row per fill: exchange time, ticker, side, qty,
                      placed price, fill price, Bollinger upper/mid/lower at
                      the triggering bar, order number
@@ -277,14 +277,27 @@ def build_panel_html(positions, fills):
     POSITIONS/FILLS come from the broker, so they appear at once on startup
     and survive restarts; LIVE is in-memory for the current process. Raw
     stdout never shows here. All values are HTML-escaped."""
-    open_pos = [(t, q) for t, q in positions.items() if q]
-    if open_pos:
-        pos_html = " &nbsp;&nbsp; ".join(
-            f'{html.escape(t)} <b>{"LONG" if q > 0 else "SHORT"} {abs(q)}</b>'
-            for t, q in open_pos
+    pos_head = ("<tr><th>instrument</th><th>buy qty</th><th>buy price</th>"
+                "<th>sell qty</th><th>sell price</th><th>net qty</th>"
+                "<th>net avg</th><th>cf qty</th></tr>")
+    prows = []
+    for p in sorted(positions, key=lambda p: p["tsym"]):
+        net_qty = p["net_qty"]
+        net_class = "side-buy" if net_qty > 0 else ("side-sell" if net_qty < 0 else "")
+        prows.append(
+            "<tr>"
+            f'<td>{html.escape(p["tsym"])}</td>'
+            f'<td class="num">{p["buy_qty"]}</td>'
+            f'<td class="num">{_num(p["buy_price"])}</td>'
+            f'<td class="num">{p["sell_qty"]}</td>'
+            f'<td class="num">{_num(p["sell_price"])}</td>'
+            f'<td class="num {net_class}">{net_qty}</td>'
+            f'<td class="num">{_num(p["net_avg"])}</td>'
+            f'<td class="num">{p["cf_qty"]}</td>'
+            "</tr>"
         )
-    else:
-        pos_html = "flat"
+    if not prows:
+        prows.append('<tr><td colspan="8" class="empty">flat - no positions</td></tr>')
 
     head = ("<tr><th>time</th><th>ticker</th><th>side</th><th>qty</th>"
             "<th>placed</th><th>fill</th><th>BB upper</th><th>BB mid</th>"
@@ -320,7 +333,7 @@ def build_panel_html(positions, fills):
 
     return (
         '<div class="sec">POSITIONS</div>'
-        f'<div class="pos">{pos_html}</div>'
+        f'<div class="scrollx"><table class="fills">{pos_head}{"".join(prows)}</table></div>'
         '<div class="sec">FILLS TODAY</div>'
         f'<div class="scrollx"><table class="fills">{head}{"".join(frows)}</table></div>'
         '<div class="sec">LIVE</div>'
@@ -372,8 +385,6 @@ def build_dashboard_html(figs, positions, fills):
            font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
   .logs .sec {{ color: #9aa4b0; font-weight: bold; letter-spacing: 0.05em;
                 background: #161b22; padding: 4px 10px; position: sticky; left: 0; }}
-  .logs .pos {{ padding: 4px 10px; }}
-  .logs .pos b {{ color: #e6e6e6; }}
   .scrollx {{ overflow-x: auto; }}
   table.fills {{ border-collapse: collapse; white-space: nowrap; }}
   table.fills th, table.fills td {{ padding: 2px 10px; border-bottom: 1px solid #1a1e24; text-align: left; }}
@@ -674,29 +685,32 @@ strategies = {
     for ticker, token in TICKERS.items()
 }
 
-def fetch_position_snapshot():
-    """Current net position per ticker and today's raw fills, straight from
-    the active broker - the same source of truth as the chart markers, so it
-    reflects manual trades too and survives bot restarts. Any broker hiccup
-    degrades to empty/zero rather than breaking the dashboard rewrite."""
-    positions = {}
-    for ticker in TICKERS:
-        try:
-            positions[ticker] = broker.net_position(ticker)
-        except Exception as e:
-            print(f"[dashboard] net_position({ticker}) failed: {e}")
-            positions[ticker] = 0
+def fetch_positions_book():
+    """Every position currently open on the account, straight from the
+    active broker - not just the tracked tickers, so this shows the same
+    thing a dealer-style position book would (see NorenBroker/KiteBroker
+    .position_book). A broker hiccup degrades to an empty list rather than
+    breaking the dashboard rewrite."""
     try:
-        fills = broker.trades()
+        return broker.position_book()
+    except Exception as e:
+        print(f"[dashboard] position_book() failed: {e}")
+        return []
+
+def fetch_fills():
+    """Today's raw fills from the active broker. A broker hiccup degrades to
+    an empty list rather than breaking the dashboard rewrite."""
+    try:
+        return broker.trades()
     except Exception as e:
         print(f"[dashboard] trades() failed: {e}")
-        fills = []
-    return positions, fills
+        return []
 
 def refresh_dashboard():
     """Rebuild every ticker's chart from current state and rewrite the
     combined dashboard file."""
-    trade_markers = fetch_trade_markers(broker)
+    fills = fetch_fills()
+    trade_markers = fetch_trade_markers(fills)
     figs = {}
     dfs = {}
     for token in instrument_tokens:
@@ -705,7 +719,7 @@ def refresh_dashboard():
         df = strategy.df if strategy.df is not None else ba.state[token]["historical_df"]
         dfs[ticker] = df
         figs[ticker] = make_candle_fig(df, ticker, log=trade_markers[ticker])
-    positions, fills = fetch_position_snapshot()
+    positions = fetch_positions_book()
     enrich_fills_with_bands(fills, dfs)
     return write_dashboard_html(figs, positions, fills)
 

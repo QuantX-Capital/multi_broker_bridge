@@ -117,6 +117,31 @@ class KiteBroker:
             })
         return out
 
+    def position_book(self):
+        """All of today's positions, normalized to the shared shape:
+            {tsym, buy_qty, buy_price, sell_qty, sell_price, net_qty, net_avg, cf_qty}
+        Only rows with any qty (buy, sell, net or carried forward) are
+        returned. cf_qty is Kite's overnight (carried forward) quantity."""
+        out = []
+        for p in self.kite.positions()["day"]:
+            buy_qty = int(p.get("buy_quantity", 0) or 0)
+            sell_qty = int(p.get("sell_quantity", 0) or 0)
+            net_qty = int(p.get("quantity", 0) or 0)
+            cf_qty = int(p.get("overnight_quantity", 0) or 0)
+            if not (buy_qty or sell_qty or net_qty or cf_qty):
+                continue
+            out.append({
+                "tsym": p.get("tradingsymbol", ""),
+                "buy_qty": buy_qty,
+                "buy_price": float(p.get("buy_price", 0) or 0),
+                "sell_qty": sell_qty,
+                "sell_price": float(p.get("sell_price", 0) or 0),
+                "net_qty": net_qty,
+                "net_avg": float(p.get("average_price", 0) or 0),
+                "cf_qty": cf_qty,
+            })
+        return out
+
 
 class NorenBroker:
     """Mastertrust Noren REST execution. Data still comes from Zerodha."""
@@ -317,6 +342,46 @@ class NorenBroker:
                 "placed_price": float(placed) if placed is not None else None,
                 "fill_price": float(fill) if fill is not None else 0.0,
                 "order_no": str(t.get("norenordno", "")),
+            })
+        return out
+
+    def position_book(self):
+        """All positions currently in this account - not just the tracked
+        tickers - normalized to the shared shape:
+            {tsym, buy_qty, buy_price, sell_qty, sell_price, net_qty, net_avg, cf_qty}
+        Only rows with any qty (buy, sell, net or carried forward) are
+        returned. Field names follow the standard Noren PositionBook spec;
+        like trades(), Mastertrust's build can vary a little - verify
+        against one real PositionBook row if a column looks off and adjust
+        the keys below."""
+        book = self._call("PositionBook", tolerate_no_data=True)
+
+        def _f(d, key, alt=None):
+            v = d.get(key)
+            if v in (None, "", "NA") and alt:
+                v = d.get(alt)
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return 0.0
+
+        out = []
+        for p in book:
+            buy_qty = int(_f(p, "daybuyqty"))
+            sell_qty = int(_f(p, "daysellqty"))
+            net_qty = int(_f(p, "netqty"))
+            cf_qty = int(_f(p, "cfbuyqty")) - int(_f(p, "cfsellqty"))
+            if not (buy_qty or sell_qty or net_qty or cf_qty):
+                continue
+            out.append({
+                "tsym": p.get("tsym", ""),
+                "buy_qty": buy_qty,
+                "buy_price": _f(p, "daybuyavgprc", "daybuyavg"),
+                "sell_qty": sell_qty,
+                "sell_price": _f(p, "daysellavgprc", "daysellavg"),
+                "net_qty": net_qty,
+                "net_avg": _f(p, "netavgprc", "netupldprc"),
+                "cf_qty": cf_qty,
             })
         return out
 
