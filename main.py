@@ -1,3 +1,4 @@
+import html
 import json
 import os
 import webbrowser
@@ -14,7 +15,7 @@ import talib
 import requests
 
 from brokers import make_broker
-from logger import enable_file_logging
+from logger import enable_file_logging, tail_log
 
 enable_file_logging()
 
@@ -216,11 +217,35 @@ def make_candle_fig(df, title, log=None):
     return fig
 
 
+def build_log_rows_html():
+    """Render the tail of today's log file as <tr> rows for the dashboard's
+    bottom log panel. Each line is '[timestamp] message'; the timestamp is
+    split into its own narrow column. Content is HTML-escaped."""
+    rows = []
+    for line in tail_log():
+        if line.startswith("[") and "] " in line:
+            ts, msg = line[1:].split("] ", 1)
+        else:
+            ts, msg = "", line
+        rows.append(
+            f'<tr><td class="log-ts">{html.escape(ts)}</td>'
+            f'<td class="log-msg">{html.escape(msg)}</td></tr>'
+        )
+    if not rows:
+        rows.append('<tr><td class="log-ts"></td>'
+                    '<td class="log-msg">(no log output yet)</td></tr>')
+    return "".join(rows)
+
+
 def build_dashboard_html(figs):
     """Combine per-ticker figures into one page: a dropdown toggles which
     ticker's chart panel is visible. Selection is kept in localStorage so it
     survives the page's own auto-refresh (meta refresh reloads the whole
-    page, which would otherwise reset the dropdown to the first ticker)."""
+    page, which would otherwise reset the dropdown to the first ticker).
+
+    The bottom 25% of the page is a scrolling table of the most recent log
+    lines (embedded at file-write time, so it's as fresh as the last chart
+    rebuild)."""
     panels = []
     options = []
     for i, (ticker, fig) in enumerate(figs.items()):
@@ -245,9 +270,16 @@ def build_dashboard_html(figs):
   body {{ font-family: sans-serif; display: flex; flex-direction: column; background: #111418; color: #e6e6e6; }}
   .header {{ flex: 0 0 auto; padding: 12px 16px; }}
   select {{ font-size: 16px; padding: 6px; background: #1e2229; color: #e6e6e6; border: 1px solid #3a3f47; }}
+  .charts {{ flex: 3 1 0; min-height: 0; display: flex; flex-direction: column; }}
   .tab-panel {{ display: none; flex: 1 1 auto; min-height: 0; }}
   .tab-panel.active {{ display: block; }}
   .tab-panel > div {{ width: 100% !important; height: 100% !important; }}
+  .logs {{ flex: 1 1 0; min-height: 0; overflow-y: auto; border-top: 1px solid #3a3f47; background: #0c0f12; }}
+  .logs table {{ width: 100%; border-collapse: collapse;
+                 font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+  .logs td {{ padding: 2px 10px; vertical-align: top; border-bottom: 1px solid #1a1e24;
+              white-space: pre-wrap; word-break: break-word; }}
+  .log-ts {{ color: #7a828c; white-space: nowrap; width: 1%; }}
 </style>
 </head>
 <body>
@@ -257,7 +289,14 @@ def build_dashboard_html(figs):
 {''.join(options)}
 </select>
 </div>
+<div class="charts">
 {''.join(panels)}
+</div>
+<div class="logs" id="logs">
+<table><tbody>
+{build_log_rows_html()}
+</tbody></table>
+</div>
 <script>
 function showTicker(ticker) {{
   document.querySelectorAll('.tab-panel').forEach(function(el) {{ el.classList.remove('active'); }});
@@ -282,6 +321,11 @@ function showTicker(ticker) {{
   var initial = (saved && options.indexOf(saved) !== -1) ? saved : options[0];
   select.value = initial;
   showTicker(initial);
+}})();
+(function() {{
+  // Keep the log panel pinned to the newest line across each auto-refresh.
+  var logs = document.getElementById('logs');
+  if (logs) logs.scrollTop = logs.scrollHeight;
 }})();
 </script>
 </body>

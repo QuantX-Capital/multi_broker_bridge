@@ -55,3 +55,17 @@ def enable_file_logging():
 
     sys.stdout = _Tee(sys.stdout, log_file, lock)
     sys.stderr = _Tee(sys.stderr, log_file, lock)
+
+
+def tail_log(max_lines=250):
+    """Return up to the last `max_lines` lines of today's log file, newest
+    last, each without its trailing newline. Empty list if nothing has been
+    logged yet today. Used to embed a live log panel in the dashboard."""
+    today = datetime.now(IST).strftime("%Y-%m-%d")
+    path = LOG_DIR / f"{today}.log"
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        return []
+    return [ln.rstrip("\n") for ln in lines[-max_lines:]]
