@@ -217,33 +217,63 @@ def make_candle_fig(df, title, log=None):
     return fig
 
 
-def build_log_rows_html():
-    """Render recent trade events - fresh entries, adds, exits, orders
-    placed, fills, rejections, position changes, square-off - as <tr> rows
-    for the dashboard's bottom panel. Only lines logged via logger.event()
-    show up here; raw stdout (bar chatter, DataFrame dumps, symbol
-    resolution) does not. Content is HTML-escaped."""
+def _panel_row(ts, msg, cls=""):
+    tr = f'<tr class="{cls}">' if cls else "<tr>"
+    return (f'{tr}<td class="log-ts">{html.escape(ts)}</td>'
+            f'<td class="log-msg">{html.escape(msg)}</td></tr>')
+
+
+def build_log_rows_html(positions, fills):
+    """Render the dashboard's bottom panel as <tr> rows, in three sections:
+
+      POSITIONS    - current net qty per ticker, straight from the broker
+      FILLS TODAY  - today's real fills from the broker
+      LIVE         - this session's logger.event() stream (entries, adds,
+                     exits, order placed/complete/rejected, square-off)
+
+    The first two come from broker truth so they show up immediately on
+    startup and survive bot restarts; the third is in-memory and only spans
+    the current process. Raw stdout never appears here. All text is escaped."""
     rows = []
-    for ts, msg in recent_events():
-        rows.append(
-            f'<tr><td class="log-ts">{html.escape(ts)}</td>'
-            f'<td class="log-msg">{html.escape(msg)}</td></tr>'
-        )
-    if not rows:
-        rows.append('<tr><td class="log-ts"></td>'
-                    '<td class="log-msg">(no events yet)</td></tr>')
+
+    rows.append(_panel_row("", "POSITIONS", cls="log-sec"))
+    open_pos = [(t, q) for t, q in positions.items() if q]
+    if open_pos:
+        for t, q in open_pos:
+            rows.append(_panel_row("", f"{t}  {'LONG' if q > 0 else 'SHORT'} {abs(q)}"))
+    else:
+        rows.append(_panel_row("", "flat"))
+
+    rows.append(_panel_row("", "FILLS TODAY", cls="log-sec"))
+    if fills:
+        for f in sorted(fills, key=lambda f: f["fill_timestamp"]):
+            rows.append(_panel_row(
+                f["fill_timestamp"].strftime("%H:%M:%S"),
+                f'{f["tsym"]}  {f["transaction_type"]}',
+            ))
+    else:
+        rows.append(_panel_row("", "none"))
+
+    rows.append(_panel_row("", "LIVE", cls="log-sec"))
+    events = recent_events()
+    if events:
+        for ts, msg in events:
+            rows.append(_panel_row(ts, msg))
+    else:
+        rows.append(_panel_row("", "(no events this session)"))
+
     return "".join(rows)
 
 
-def build_dashboard_html(figs):
+def build_dashboard_html(figs, positions, fills):
     """Combine per-ticker figures into one page: a dropdown toggles which
     ticker's chart panel is visible. Selection is kept in localStorage so it
     survives the page's own auto-refresh (meta refresh reloads the whole
     page, which would otherwise reset the dropdown to the first ticker).
 
-    The bottom 25% of the page is a scrolling table of the most recent log
-    lines (embedded at file-write time, so it's as fresh as the last chart
-    rebuild)."""
+    The bottom 25% of the page is a scrolling panel of positions, today's
+    fills and the live event stream (see build_log_rows_html), embedded at
+    file-write time, so it's as fresh as the last chart rebuild."""
     panels = []
     options = []
     for i, (ticker, fig) in enumerate(figs.items()):
@@ -278,6 +308,8 @@ def build_dashboard_html(figs):
   .logs td {{ padding: 2px 10px; vertical-align: top; border-bottom: 1px solid #1a1e24; }}
   .log-ts {{ color: #7a828c; white-space: nowrap; width: 72px; }}
   .log-msg {{ white-space: pre-wrap; overflow-wrap: anywhere; }}
+  .log-sec td {{ color: #9aa4b0; font-weight: bold; letter-spacing: 0.05em;
+                 background: #161b22; border-bottom: 1px solid #2a2f37; padding-top: 6px; }}
 </style>
 </head>
 <body>
@@ -292,7 +324,7 @@ def build_dashboard_html(figs):
 </div>
 <div class="logs" id="logs">
 <table><tbody>
-{build_log_rows_html()}
+{build_log_rows_html(positions, fills)}
 </tbody></table>
 </div>
 <script>
@@ -330,12 +362,12 @@ function showTicker(ticker) {{
 </html>"""
 
 
-def write_dashboard_html(figs):
+def write_dashboard_html(figs, positions, fills):
     """Overwrite the combined dashboard file. The already-open browser tab
     picks up the new content on its next auto-refresh (see REFRESH_SECONDS)."""
     CHARTS_DIR.mkdir(exist_ok=True)
     path = CHARTS_DIR / "dashboard.html"
-    path.write_text(build_dashboard_html(figs), encoding="utf-8")
+    path.write_text(build_dashboard_html(figs, positions, fills), encoding="utf-8")
     return path
 
 
@@ -540,6 +572,25 @@ strategies = {
     for ticker, token in TICKERS.items()
 }
 
+def fetch_position_snapshot():
+    """Current net position per ticker and today's raw fills, straight from
+    the active broker - the same source of truth as the chart markers, so it
+    reflects manual trades too and survives bot restarts. Any broker hiccup
+    degrades to empty/zero rather than breaking the dashboard rewrite."""
+    positions = {}
+    for ticker in TICKERS:
+        try:
+            positions[ticker] = broker.net_position(ticker)
+        except Exception as e:
+            print(f"[dashboard] net_position({ticker}) failed: {e}")
+            positions[ticker] = 0
+    try:
+        fills = broker.trades()
+    except Exception as e:
+        print(f"[dashboard] trades() failed: {e}")
+        fills = []
+    return positions, fills
+
 def refresh_dashboard():
     """Rebuild every ticker's chart from current state and rewrite the
     combined dashboard file."""
@@ -550,7 +601,8 @@ def refresh_dashboard():
         strategy = strategies[token]
         df = strategy.df if strategy.df is not None else ba.state[token]["historical_df"]
         figs[ticker] = make_candle_fig(df, ticker, log=trade_markers[ticker])
-    return write_dashboard_html(figs)
+    positions, fills = fetch_position_snapshot()
+    return write_dashboard_html(figs, positions, fills)
 
 # seed the dashboard up front. Locally this opens a browser tab that then
 # auto-refreshes (REFRESH_SECONDS) and picks up rewrites below; on a headless
