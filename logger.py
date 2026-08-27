@@ -57,15 +57,26 @@ def enable_file_logging():
     sys.stderr = _Tee(sys.stderr, log_file, lock)
 
 
-def tail_log(max_lines=250):
-    """Return up to the last `max_lines` lines of today's log file, newest
-    last, each without its trailing newline. Empty list if nothing has been
-    logged yet today. Used to embed a live log panel in the dashboard."""
-    today = datetime.now(IST).strftime("%Y-%m-%d")
-    path = LOG_DIR / f"{today}.log"
-    try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
-    except FileNotFoundError:
-        return []
-    return [ln.rstrip("\n") for ln in lines[-max_lines:]]
+_events = []
+_events_lock = threading.Lock()
+_MAX_EVENTS = 500
+
+
+def event(msg):
+    """Record a trade-relevant line - fresh entries, adds, exits, orders
+    placed, fills, rejections, position changes, square-off. Behaves like
+    print() (still goes to the console and the daily log file), and also
+    appends to an in-memory buffer that is the ONLY thing the dashboard's
+    bottom panel shows. Plain print() calls stay out of that panel."""
+    print(msg)
+    ts = datetime.now(IST).strftime("%H:%M:%S")
+    with _events_lock:
+        _events.append((ts, str(msg)))
+        if len(_events) > _MAX_EVENTS:
+            del _events[: len(_events) - _MAX_EVENTS]
+
+
+def recent_events(max_items=250):
+    """Return recent (HH:MM:SS, message) event pairs, oldest first."""
+    with _events_lock:
+        return list(_events[-max_items:])

@@ -26,6 +26,8 @@ from zoneinfo import ZoneInfo
 import boto3
 import requests
 
+from logger import event
+
 IST = ZoneInfo("Asia/Kolkata")
 
 NOREN_SECRET_ID = "/trading/brokers/mastertrust/vaibhav"
@@ -187,12 +189,12 @@ class NorenBroker:
             })
         except NorenError as e:
             # a broken pre-check should not block trading; log and proceed
-            print(f"[noren] {ticker} margin pre-check errored ({e}), proceeding")
+            event(f"[noren] {ticker} margin pre-check errored ({e}), proceeding")
             return True
 
         remarks = result.get("remarks", "")
         if "Insufficient Balance" in remarks:
-            print(f"[noren] {ticker} BUY SKIPPED - insufficient margin "
+            event(f"[noren] {ticker} BUY SKIPPED - insufficient margin "
                   f"(shortfall={result.get('marginused')}, cash={result.get('cash')})")
             return False
         return True
@@ -217,7 +219,7 @@ class NorenBroker:
             "ret": "DAY",
         })
         norenordno = result.get("norenordno")
-        print(f"[noren] {ticker} {side} x{qty} @ {price} placed, "
+        event(f"[noren] {ticker} {side} x{qty} @ {price} placed, "
               f"order={norenordno}")
 
         self._confirm_fill(ticker, norenordno)
@@ -238,18 +240,18 @@ class NorenBroker:
                 entry = result[0] if isinstance(result, list) else result
                 status = entry.get("status")
             except NorenError as e:
-                print(f"[noren] {ticker} status check failed for "
+                event(f"[noren] {ticker} status check failed for "
                       f"{norenordno}: {e}")
                 continue
             if status == "COMPLETE":
-                print(f"[noren] {ticker} order {norenordno} COMPLETE")
+                event(f"[noren] {ticker} order {norenordno} COMPLETE")
                 return
             if status == "REJECTED":
-                print(f"[noren] !! {ticker} order {norenordno} REJECTED: "
+                event(f"[noren] !! {ticker} order {norenordno} REJECTED: "
                       f"{entry.get('rejreason', '')}")
                 return
 
-        print(f"[noren] !! {ticker} order {norenordno} still '{status}' after "
+        event(f"[noren] !! {ticker} order {norenordno} still '{status}' after "
               f"{FILL_POLL_ATTEMPTS} checks - VERIFY MANUALLY, position state "
               f"may drift until next bar's net_position() resync")
 

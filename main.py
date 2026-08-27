@@ -15,7 +15,7 @@ import talib
 import requests
 
 from brokers import make_broker
-from logger import enable_file_logging, tail_log
+from logger import enable_file_logging, event, recent_events
 
 enable_file_logging()
 
@@ -218,22 +218,20 @@ def make_candle_fig(df, title, log=None):
 
 
 def build_log_rows_html():
-    """Render the tail of today's log file as <tr> rows for the dashboard's
-    bottom log panel. Each line is '[timestamp] message'; the timestamp is
-    split into its own narrow column. Content is HTML-escaped."""
+    """Render recent trade events - fresh entries, adds, exits, orders
+    placed, fills, rejections, position changes, square-off - as <tr> rows
+    for the dashboard's bottom panel. Only lines logged via logger.event()
+    show up here; raw stdout (bar chatter, DataFrame dumps, symbol
+    resolution) does not. Content is HTML-escaped."""
     rows = []
-    for line in tail_log():
-        if line.startswith("[") and "] " in line:
-            ts, msg = line[1:].split("] ", 1)
-        else:
-            ts, msg = "", line
+    for ts, msg in recent_events():
         rows.append(
             f'<tr><td class="log-ts">{html.escape(ts)}</td>'
             f'<td class="log-msg">{html.escape(msg)}</td></tr>'
         )
     if not rows:
         rows.append('<tr><td class="log-ts"></td>'
-                    '<td class="log-msg">(no log output yet)</td></tr>')
+                    '<td class="log-msg">(no events yet)</td></tr>')
     return "".join(rows)
 
 
@@ -275,11 +273,11 @@ def build_dashboard_html(figs):
   .tab-panel.active {{ display: block; }}
   .tab-panel > div {{ width: 100% !important; height: 100% !important; }}
   .logs {{ flex: 1 1 0; min-height: 0; overflow-y: auto; border-top: 1px solid #3a3f47; background: #0c0f12; }}
-  .logs table {{ width: 100%; border-collapse: collapse;
+  .logs table {{ width: 100%; border-collapse: collapse; table-layout: fixed;
                  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
-  .logs td {{ padding: 2px 10px; vertical-align: top; border-bottom: 1px solid #1a1e24;
-              white-space: pre-wrap; word-break: break-word; }}
-  .log-ts {{ color: #7a828c; white-space: nowrap; width: 1%; }}
+  .logs td {{ padding: 2px 10px; vertical-align: top; border-bottom: 1px solid #1a1e24; }}
+  .log-ts {{ color: #7a828c; white-space: nowrap; width: 72px; }}
+  .log-msg {{ white-space: pre-wrap; overflow-wrap: anywhere; }}
 </style>
 </head>
 <body>
@@ -472,15 +470,15 @@ class LONGSTRATEGY:
         # resync if the position was closed outside this loop
         # (MIS auto square-off, manual exit, stop hit)
         if active_positions == 0 and self.enteries_taken > 0:
-            print(f"[{self.ticker}] position closed externally, resetting counter")
+            event(f"[{self.ticker}] position closed externally, resetting counter")
             self.enteries_taken = 0
 
         if active_positions > 0:
-            print(f"[{self.ticker}] position ONGOING: qty={active_positions}, "
+            event(f"[{self.ticker}] position ONGOING: qty={active_positions}, "
                   f"entries_taken={self.enteries_taken}/{self.max_entries}, last_close={status['close']:.2f}")
 
             if status["exit_conditions"] == -1:
-                print(f"[{self.ticker}] EXIT {active_positions}")
+                event(f"[{self.ticker}] EXIT {active_positions}")
                 order_id = broker.sell(self.ticker, active_positions)
                 if order_id:
                     self.enteries_taken = 0
@@ -489,7 +487,7 @@ class LONGSTRATEGY:
             elif (self.enabled
                   and self.enteries_taken < self.max_entries
                   and status["add_position"] == 1):
-                print(f"[{self.ticker}] ADD rung {self.enteries_taken + 1}")
+                event(f"[{self.ticker}] ADD rung {self.enteries_taken + 1}")
                 order_id = broker.buy(self.ticker, self.quantity)
                 if order_id:
                     self.enteries_taken += 1
@@ -503,7 +501,7 @@ class LONGSTRATEGY:
             # already the real guard against double-entering, so requiring
             # fresh_entry on top of it can permanently lock out a flat ticker.
             if self.enabled and status["entry_conditions"] == 1:
-                print(f"[{self.ticker}] FRESH ENTRY")
+                event(f"[{self.ticker}] FRESH ENTRY")
                 order_id = broker.buy(self.ticker, self.quantity)
                 if order_id:
                     self.enteries_taken = 1
@@ -573,11 +571,11 @@ def square_off_all():
     also catches positions opened manually - same as the chart markers."""
     global squared_off_today
     squared_off_today = True
-    print(f"=== {SQUAREOFF_TIME} cutoff reached, squaring off all positions ===")
+    event(f"=== {SQUAREOFF_TIME} cutoff reached, squaring off all positions ===")
     for token, ticker in token_to_ticker.items():
         qty = broker.net_position(ticker)
         if qty > 0:
-            print(f"[{ticker}] SQUARE-OFF: selling {qty}")
+            event(f"[{ticker}] SQUARE-OFF: selling {qty}")
             broker.sell(ticker, qty)
         strategies[token].enteries_taken = 0
         strategies[token].enabled = False
