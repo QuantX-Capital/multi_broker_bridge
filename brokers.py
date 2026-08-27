@@ -98,15 +98,24 @@ class KiteBroker:
         return 0
 
     def trades(self):
-        """Today's fills, normalized to {tsym, transaction_type, fill_timestamp}."""
-        return [
-            {
+        """Today's fills, normalized to the shared shape:
+            {tsym, transaction_type, fill_timestamp, exchange_time,
+             qty, placed_price, fill_price, order_no}
+        Kite orders here are MARKET, so there is no meaningful placed price -
+        placed_price is None and only the average fill price is known."""
+        out = []
+        for t in self.kite.trades():
+            out.append({
                 "tsym": t["tradingsymbol"],
                 "transaction_type": t["transaction_type"],
                 "fill_timestamp": t["fill_timestamp"],
-            }
-            for t in self.kite.trades()
-        ]
+                "exchange_time": t.get("exchange_timestamp") or t["fill_timestamp"],
+                "qty": int(float(t.get("quantity", 0) or 0)),
+                "placed_price": None,
+                "fill_price": float(t.get("average_price", 0) or 0),
+                "order_no": str(t.get("order_id", "")),
+            })
+        return out
 
 
 class NorenBroker:
@@ -272,17 +281,42 @@ class NorenBroker:
         return 0
 
     def trades(self):
-        """Today's fills, normalized to {tsym, transaction_type, fill_timestamp}
-        to match KiteBroker.trades(). exch_tm is the exchange fill time as a
-        naive IST wall-clock string, e.g. '25-08-2026 14:05:00'."""
+        """Today's fills, normalized to the shared shape:
+            {tsym, transaction_type, fill_timestamp, exchange_time,
+             qty, placed_price, fill_price, order_no}
+        exch_tm is the exchange fill time as a naive IST wall-clock string,
+        e.g. '25-08-2026 14:05:00'.
+
+        Field names for qty/price come from the Noren TradeBook payload and
+        vary a little by build - the _first() fallbacks cover the common
+        aliases (flprc/avgprc/prc, flqty/qty/fillshares). Verify against one
+        real TradeBook row if a column shows blank; a missing key degrades to
+        0/None rather than raising."""
         book = self._call("TradeBook", tolerate_no_data=True)
+
+        def _first(d, *keys):
+            for k in keys:
+                v = d.get(k)
+                if v not in (None, "", "NA", "0", 0):
+                    return v
+            return None
+
         out = []
         for t in book:
             tsym = t["tsym"][:-3] if t["tsym"].endswith("-EQ") else t["tsym"]
+            exch_time = datetime.strptime(t["exch_tm"], "%d-%m-%Y %H:%M:%S")
+            qty = _first(t, "flqty", "qty", "fillshares")
+            placed = _first(t, "prc", "rprc")
+            fill = _first(t, "flprc", "avgprc", "prc")
             out.append({
                 "tsym": tsym,
                 "transaction_type": "BUY" if t["trantype"] == "B" else "SELL",
-                "fill_timestamp": datetime.strptime(t["exch_tm"], "%d-%m-%Y %H:%M:%S"),
+                "fill_timestamp": exch_time,
+                "exchange_time": exch_time,
+                "qty": int(float(qty)) if qty is not None else 0,
+                "placed_price": float(placed) if placed is not None else None,
+                "fill_price": float(fill) if fill is not None else 0.0,
+                "order_no": str(t.get("norenordno", "")),
             })
         return out
 

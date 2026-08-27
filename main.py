@@ -217,52 +217,115 @@ def make_candle_fig(df, title, log=None):
     return fig
 
 
-def _panel_row(ts, msg, cls=""):
-    tr = f'<tr class="{cls}">' if cls else "<tr>"
-    return (f'{tr}<td class="log-ts">{html.escape(ts)}</td>'
-            f'<td class="log-msg">{html.escape(msg)}</td></tr>')
+def enrich_fills_with_bands(fills, dfs):
+    """For each fill, attach bb_upper / bb_middle / bb_lower taken from the
+    last CLOSED 5-min bar before the fill - i.e. the bar the strategy was
+    looking at when it fired the order - computed from that ticker's
+    dataframe with the same 20 / 2.0 params the chart uses. Left as None for
+    fills on untracked symbols or before enough bars exist."""
+    cache = {}
+    for f in fills:
+        f.setdefault("bb_upper", None)
+        f.setdefault("bb_middle", None)
+        f.setdefault("bb_lower", None)
+        tsym = f["tsym"]
+        df = dfs.get(tsym)
+        if df is None or len(df) == 0:
+            continue
+        try:
+            if tsym not in cache:
+                u, m, l = talib.BBANDS(
+                    df["close"].to_numpy(dtype=float),
+                    timeperiod=20, nbdevup=2.0, nbdevdn=2.0, matype=0,
+                )
+                cache[tsym] = pd.DataFrame({"u": u, "m": m, "l": l}, index=df.index)
+            bands = cache[tsym]
+            t = f.get("exchange_time") or f["fill_timestamp"]
+            bar = pd.Timestamp(t)
+            bar = bar.tz_localize(IST) if bar.tzinfo is None else bar.tz_convert(IST)
+            prior = bands.index[bands.index < bar.floor("5min")]
+            if len(prior) == 0:
+                continue
+            row = bands.loc[prior[-1]]
+            f["bb_upper"] = None if pd.isna(row["u"]) else round(float(row["u"]), 2)
+            f["bb_middle"] = None if pd.isna(row["m"]) else round(float(row["m"]), 2)
+            f["bb_lower"] = None if pd.isna(row["l"]) else round(float(row["l"]), 2)
+        except Exception as e:
+            print(f"[dashboard] band lookup failed for {tsym} fill: {e}")
+    return fills
 
 
-def build_log_rows_html(positions, fills):
-    """Render the dashboard's bottom panel as <tr> rows, in three sections:
+def _num(v, nd=2):
+    """Number -> fixed-decimals string; em dash for None/blank/non-numeric."""
+    if v is None or v == "":
+        return "—"
+    try:
+        return f"{float(v):.{nd}f}"
+    except (TypeError, ValueError):
+        return html.escape(str(v))
 
-      POSITIONS    - current net qty per ticker, straight from the broker
-      FILLS TODAY  - today's real fills from the broker
-      LIVE         - this session's logger.event() stream (entries, adds,
-                     exits, order placed/complete/rejected, square-off)
 
-    The first two come from broker truth so they show up immediately on
-    startup and survive bot restarts; the third is in-memory and only spans
-    the current process. Raw stdout never appears here. All text is escaped."""
-    rows = []
+def build_panel_html(positions, fills):
+    """Inner HTML for the resizable bottom panel, in three parts:
 
-    rows.append(_panel_row("", "POSITIONS", cls="log-sec"))
+      POSITIONS    - current net qty per ticker (broker truth)
+      FILLS TODAY  - one wide row per fill: exchange time, ticker, side, qty,
+                     placed price, fill price, Bollinger upper/mid/lower at
+                     the triggering bar, order number
+      LIVE         - this session's logger.event() stream
+
+    POSITIONS/FILLS come from the broker, so they appear at once on startup
+    and survive restarts; LIVE is in-memory for the current process. Raw
+    stdout never shows here. All values are HTML-escaped."""
     open_pos = [(t, q) for t, q in positions.items() if q]
     if open_pos:
-        for t, q in open_pos:
-            rows.append(_panel_row("", f"{t}  {'LONG' if q > 0 else 'SHORT'} {abs(q)}"))
+        pos_html = " &nbsp;&nbsp; ".join(
+            f'{html.escape(t)} <b>{"LONG" if q > 0 else "SHORT"} {abs(q)}</b>'
+            for t, q in open_pos
+        )
     else:
-        rows.append(_panel_row("", "flat"))
+        pos_html = "flat"
 
-    rows.append(_panel_row("", "FILLS TODAY", cls="log-sec"))
-    if fills:
-        for f in sorted(fills, key=lambda f: f["fill_timestamp"]):
-            rows.append(_panel_row(
-                f["fill_timestamp"].strftime("%H:%M:%S"),
-                f'{f["tsym"]}  {f["transaction_type"]}',
-            ))
-    else:
-        rows.append(_panel_row("", "none"))
+    head = ("<tr><th>time</th><th>ticker</th><th>side</th><th>qty</th>"
+            "<th>placed</th><th>fill</th><th>BB upper</th><th>BB mid</th>"
+            "<th>BB lower</th><th>order #</th></tr>")
+    frows = []
+    for f in sorted(fills, key=lambda f: f.get("exchange_time") or f["fill_timestamp"]):
+        t = f.get("exchange_time") or f["fill_timestamp"]
+        side = f["transaction_type"]
+        frows.append(
+            "<tr>"
+            f'<td>{t.strftime("%H:%M:%S")}</td>'
+            f'<td>{html.escape(f["tsym"])}</td>'
+            f'<td class="side-{side.lower()}">{html.escape(side)}</td>'
+            f'<td class="num">{f.get("qty", 0)}</td>'
+            f'<td class="num">{_num(f.get("placed_price"))}</td>'
+            f'<td class="num">{_num(f.get("fill_price"))}</td>'
+            f'<td class="num">{_num(f.get("bb_upper"))}</td>'
+            f'<td class="num">{_num(f.get("bb_middle"))}</td>'
+            f'<td class="num">{_num(f.get("bb_lower"))}</td>'
+            f'<td class="ordno">{html.escape(str(f.get("order_no", "")))}</td>'
+            "</tr>"
+        )
+    if not frows:
+        frows.append('<tr><td colspan="10" class="empty">no fills today</td></tr>')
 
-    rows.append(_panel_row("", "LIVE", cls="log-sec"))
-    events = recent_events()
-    if events:
-        for ts, msg in events:
-            rows.append(_panel_row(ts, msg))
-    else:
-        rows.append(_panel_row("", "(no events this session)"))
+    erows = []
+    for ts, msg in recent_events():
+        erows.append(f'<tr><td class="log-ts">{html.escape(ts)}</td>'
+                     f'<td class="log-msg">{html.escape(msg)}</td></tr>')
+    if not erows:
+        erows.append('<tr><td class="log-ts"></td>'
+                     '<td class="log-msg">(no events this session)</td></tr>')
 
-    return "".join(rows)
+    return (
+        '<div class="sec">POSITIONS</div>'
+        f'<div class="pos">{pos_html}</div>'
+        '<div class="sec">FILLS TODAY</div>'
+        f'<div class="scrollx"><table class="fills">{head}{"".join(frows)}</table></div>'
+        '<div class="sec">LIVE</div>'
+        f'<table class="events">{"".join(erows)}</table>'
+    )
 
 
 def build_dashboard_html(figs, positions, fills):
@@ -298,18 +361,32 @@ def build_dashboard_html(figs, positions, fills):
   body {{ font-family: sans-serif; display: flex; flex-direction: column; background: #111418; color: #e6e6e6; }}
   .header {{ flex: 0 0 auto; padding: 12px 16px; }}
   select {{ font-size: 16px; padding: 6px; background: #1e2229; color: #e6e6e6; border: 1px solid #3a3f47; }}
-  .charts {{ flex: 3 1 0; min-height: 0; display: flex; flex-direction: column; }}
+  .charts {{ flex: 1 1 auto; min-height: 80px; display: flex; flex-direction: column; }}
   .tab-panel {{ display: none; flex: 1 1 auto; min-height: 0; }}
   .tab-panel.active {{ display: block; }}
   .tab-panel > div {{ width: 100% !important; height: 100% !important; }}
-  .logs {{ flex: 1 1 0; min-height: 0; overflow-y: auto; border-top: 1px solid #3a3f47; background: #0c0f12; }}
-  .logs table {{ width: 100%; border-collapse: collapse; table-layout: fixed;
-                 font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
-  .logs td {{ padding: 2px 10px; vertical-align: top; border-bottom: 1px solid #1a1e24; }}
+  .divider {{ flex: 0 0 6px; cursor: row-resize; background: #2a2f37; }}
+  .divider:hover {{ background: #3f79c2; }}
+  .logs {{ flex: 0 0 auto; height: 25vh; min-height: 60px; overflow: auto;
+           border-top: 1px solid #3a3f47; background: #0c0f12;
+           font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+  .logs .sec {{ color: #9aa4b0; font-weight: bold; letter-spacing: 0.05em;
+                background: #161b22; padding: 4px 10px; position: sticky; left: 0; }}
+  .logs .pos {{ padding: 4px 10px; }}
+  .logs .pos b {{ color: #e6e6e6; }}
+  .scrollx {{ overflow-x: auto; }}
+  table.fills {{ border-collapse: collapse; white-space: nowrap; }}
+  table.fills th, table.fills td {{ padding: 2px 10px; border-bottom: 1px solid #1a1e24; text-align: left; }}
+  table.fills th {{ color: #7a828c; font-weight: normal; }}
+  table.fills td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+  table.fills td.ordno {{ color: #7a828c; }}
+  table.fills .side-buy {{ color: #4caf7d; }}
+  table.fills .side-sell {{ color: #d9645f; }}
+  table.fills .empty {{ color: #7a828c; }}
+  table.events {{ border-collapse: collapse; width: 100%; table-layout: fixed; }}
+  table.events td {{ padding: 2px 10px; vertical-align: top; border-bottom: 1px solid #1a1e24; }}
   .log-ts {{ color: #7a828c; white-space: nowrap; width: 72px; }}
   .log-msg {{ white-space: pre-wrap; overflow-wrap: anywhere; }}
-  .log-sec td {{ color: #9aa4b0; font-weight: bold; letter-spacing: 0.05em;
-                 background: #161b22; border-bottom: 1px solid #2a2f37; padding-top: 6px; }}
 </style>
 </head>
 <body>
@@ -322,10 +399,9 @@ def build_dashboard_html(figs, positions, fills):
 <div class="charts">
 {''.join(panels)}
 </div>
+<div class="divider" id="divider"></div>
 <div class="logs" id="logs">
-<table><tbody>
-{build_log_rows_html(positions, fills)}
-</tbody></table>
+{build_panel_html(positions, fills)}
 </div>
 <script>
 function showTicker(ticker) {{
@@ -353,9 +429,35 @@ function showTicker(ticker) {{
   showTicker(initial);
 }})();
 (function() {{
-  // Keep the log panel pinned to the newest line across each auto-refresh.
+  // Drag the divider to resize the bottom panel; height persists across the
+  // page's own auto-refresh (meta refresh would otherwise reset it to 25vh).
   var logs = document.getElementById('logs');
-  if (logs) logs.scrollTop = logs.scrollHeight;
+  var divider = document.getElementById('divider');
+  if (!logs || !divider) return;
+  try {{
+    var saved = parseInt(localStorage.getItem('panelHeight'), 10);
+    if (saved > 0) logs.style.height = saved + 'px';
+  }} catch (e) {{}}
+  function resizePlot() {{
+    var plot = document.querySelector('.tab-panel.active .plotly-graph-div');
+    if (plot && window.Plotly) Plotly.Plots.resize(plot);
+  }}
+  var dragging = false;
+  divider.addEventListener('pointerdown', function(e) {{
+    dragging = true; divider.setPointerCapture(e.pointerId); e.preventDefault();
+  }});
+  divider.addEventListener('pointermove', function(e) {{
+    if (!dragging) return;
+    var vh = window.innerHeight;
+    logs.style.height = Math.max(60, Math.min(vh - 140, vh - e.clientY)) + 'px';
+    resizePlot();
+  }});
+  divider.addEventListener('pointerup', function(e) {{
+    dragging = false;
+    try {{ divider.releasePointerCapture(e.pointerId); }} catch (ex) {{}}
+    try {{ localStorage.setItem('panelHeight', parseInt(logs.style.height, 10)); }} catch (ex) {{}}
+    resizePlot();
+  }});
 }})();
 </script>
 </body>
@@ -596,12 +698,15 @@ def refresh_dashboard():
     combined dashboard file."""
     trade_markers = fetch_trade_markers(broker)
     figs = {}
+    dfs = {}
     for token in instrument_tokens:
         ticker = token_to_ticker[token]
         strategy = strategies[token]
         df = strategy.df if strategy.df is not None else ba.state[token]["historical_df"]
+        dfs[ticker] = df
         figs[ticker] = make_candle_fig(df, ticker, log=trade_markers[ticker])
     positions, fills = fetch_position_snapshot()
+    enrich_fills_with_bands(fills, dfs)
     return write_dashboard_html(figs, positions, fills)
 
 # seed the dashboard up front. Locally this opens a browser tab that then
