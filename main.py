@@ -204,7 +204,17 @@ def make_candle_fig(df, title, log=None):
     # the range boundary only shows its right (or left) half
     pad = timedelta(minutes=2, seconds=30)
 
-    fig.update_layout(title=title, xaxis_rangeslider_visible=False, template="plotly_dark", autosize=True)
+    fig.update_layout(
+        title=title, xaxis_rangeslider_visible=False, template="plotly_dark", autosize=True,
+        # float the legend inside the plot area (top-left) instead of letting
+        # Plotly reserve a separate strip of width to its right for it - that
+        # strip was eating into the already-narrow chart pane.
+        legend=dict(
+            x=0.01, y=0.99, xanchor="left", yanchor="top",
+            bgcolor="rgba(17,20,24,0.6)", bordercolor="#3a3f47", borderwidth=1,
+        ),
+        margin=dict(r=20),
+    )
     fig.update_xaxes(
         range=[session_start - pad, session_end + pad],
         rangebreaks=[
@@ -381,7 +391,7 @@ def build_dashboard_html(figs, positions, fills):
   .tab-panel > div {{ width: 100% !important; height: 100% !important; }}
   .divider {{ flex: 0 0 6px; cursor: col-resize; background: #2a2f37; }}
   .divider:hover {{ background: #3f79c2; }}
-  .logs {{ flex: 0 0 auto; width: 35vw; min-width: 220px; overflow: auto;
+  .logs {{ flex: 0 0 auto; width: 40vw; min-width: 220px; overflow: auto;
            border-left: 1px solid #3a3f47; background: #0c0f12;
            font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
   .logs .sec {{ color: #9aa4b0; font-weight: bold; letter-spacing: 0.05em;
