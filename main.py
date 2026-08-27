@@ -374,14 +374,15 @@ def build_dashboard_html(figs, positions, fills):
   body {{ font-family: sans-serif; display: flex; flex-direction: column; background: #111418; color: #e6e6e6; }}
   .header {{ flex: 0 0 auto; padding: 12px 16px; }}
   select {{ font-size: 16px; padding: 6px; background: #1e2229; color: #e6e6e6; border: 1px solid #3a3f47; }}
-  .charts {{ flex: 1 1 auto; min-height: 80px; display: flex; flex-direction: column; }}
+  .main {{ flex: 1 1 auto; min-height: 0; display: flex; flex-direction: row; }}
+  .charts {{ flex: 1 1 auto; min-width: 80px; display: flex; flex-direction: column; }}
   .tab-panel {{ display: none; flex: 1 1 auto; min-height: 0; }}
   .tab-panel.active {{ display: block; }}
   .tab-panel > div {{ width: 100% !important; height: 100% !important; }}
-  .divider {{ flex: 0 0 6px; cursor: row-resize; background: #2a2f37; }}
+  .divider {{ flex: 0 0 6px; cursor: col-resize; background: #2a2f37; }}
   .divider:hover {{ background: #3f79c2; }}
-  .logs {{ flex: 0 0 auto; height: 25vh; min-height: 60px; overflow: auto;
-           border-top: 1px solid #3a3f47; background: #0c0f12;
+  .logs {{ flex: 0 0 auto; width: 25vw; min-width: 220px; overflow: auto;
+           border-left: 1px solid #3a3f47; background: #0c0f12;
            font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
   .logs .sec {{ color: #9aa4b0; font-weight: bold; letter-spacing: 0.05em;
                 background: #161b22; padding: 4px 10px; position: sticky; left: 0; }}
@@ -407,12 +408,14 @@ def build_dashboard_html(figs, positions, fills):
 {''.join(options)}
 </select>
 </div>
+<div class="main">
 <div class="charts">
 {''.join(panels)}
 </div>
 <div class="divider" id="divider"></div>
 <div class="logs" id="logs">
 {build_panel_html(positions, fills)}
+</div>
 </div>
 <script>
 function showTicker(ticker) {{
@@ -440,14 +443,14 @@ function showTicker(ticker) {{
   showTicker(initial);
 }})();
 (function() {{
-  // Drag the divider to resize the bottom panel; height persists across the
-  // page's own auto-refresh (meta refresh would otherwise reset it to 25vh).
+  // Drag the divider to resize the side panel; width persists across the
+  // page's own auto-refresh (meta refresh would otherwise reset it to 25vw).
   var logs = document.getElementById('logs');
   var divider = document.getElementById('divider');
   if (!logs || !divider) return;
   try {{
-    var saved = parseInt(localStorage.getItem('panelHeight'), 10);
-    if (saved > 0) logs.style.height = saved + 'px';
+    var saved = parseInt(localStorage.getItem('panelWidth'), 10);
+    if (saved > 0) logs.style.width = saved + 'px';
   }} catch (e) {{}}
   function resizePlot() {{
     var plot = document.querySelector('.tab-panel.active .plotly-graph-div');
@@ -459,14 +462,14 @@ function showTicker(ticker) {{
   }});
   divider.addEventListener('pointermove', function(e) {{
     if (!dragging) return;
-    var vh = window.innerHeight;
-    logs.style.height = Math.max(60, Math.min(vh - 140, vh - e.clientY)) + 'px';
+    var vw = window.innerWidth;
+    logs.style.width = Math.max(220, Math.min(vw - 300, vw - e.clientX)) + 'px';
     resizePlot();
   }});
   divider.addEventListener('pointerup', function(e) {{
     dragging = false;
     try {{ divider.releasePointerCapture(e.pointerId); }} catch (ex) {{}}
-    try {{ localStorage.setItem('panelHeight', parseInt(logs.style.height, 10)); }} catch (ex) {{}}
+    try {{ localStorage.setItem('panelWidth', parseInt(logs.style.width, 10)); }} catch (ex) {{}}
     resizePlot();
   }});
 }})();
