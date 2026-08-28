@@ -2,6 +2,7 @@
 file under logs/, so the bot's existing print() calls are also persisted to
 disk without changing any print() call site in main.py/brokers.py/BarAggregator.py."""
 
+import json
 import sys
 import threading
 from datetime import datetime
@@ -80,3 +81,56 @@ def recent_events(max_items=250):
     """Return recent (HH:MM:SS, message) event pairs, oldest first."""
     with _events_lock:
         return list(_events[-max_items:])
+
+
+# --------------------------------------------------------------------------
+# Delivery-conversion log
+#
+# Separate from the daily catch-all log: one JSON line per intraday position
+# converted to delivery (MIS -> CNC), recording ticker, side, qty and the
+# price it was carried at. File: logs/delivery-YYYY-MM-DD.log
+# --------------------------------------------------------------------------
+
+_delivery_lock = threading.Lock()
+
+
+def delivery_log(record):
+    """Append one delivery-conversion record as a JSON line to
+    logs/delivery-YYYY-MM-DD.log, and emit a human-readable event() line so
+    the same conversion also shows in the console, the daily log, and the
+    dashboard's LIVE panel.
+
+    Expected record keys: time, ticker, tsym, side, qty, avg_price, ltp,
+    source ('auto' = bot's 15:05 gate, 'script' = convert_to_delivery.py)."""
+    LOG_DIR.mkdir(exist_ok=True)
+    day = datetime.now(IST).strftime("%Y-%m-%d")
+    path = LOG_DIR / f"delivery-{day}.log"
+    with _delivery_lock:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, separators=(",", ":")) + "\n")
+    who = record.get("ticker") or record.get("tsym") or "?"
+    px = record.get("avg_price")
+    event(f"[delivery] {who} {record.get('side', '')} x{record.get('qty', '')} "
+          f"-> DELIVERY" + (f" @ avg {px}" if px is not None else ""))
+
+
+def read_delivery_log(day=None, max_items=200):
+    """Return the delivery-conversion records for `day` (default today) as a
+    list of dicts, oldest first. Empty list if nothing was converted or the
+    file doesn't exist."""
+    day = day or datetime.now(IST).strftime("%Y-%m-%d")
+    path = LOG_DIR / f"delivery-{day}.log"
+    out = []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    out.append(json.loads(line))
+                except ValueError:
+                    pass
+    except FileNotFoundError:
+        return []
+    return out[-max_items:]

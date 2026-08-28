@@ -15,7 +15,7 @@ import talib
 import requests
 
 from brokers import make_broker
-from logger import enable_file_logging, event, recent_events
+from logger import enable_file_logging, event, recent_events, read_delivery_log
 
 enable_file_logging()
 
@@ -382,6 +382,38 @@ def build_panel_html(positions, fills):
     )
 
 
+def build_delivered_html():
+    """Bottom 30% of the side panel: today's intraday -> delivery conversions
+    read from logs/delivery-YYYY-MM-DD.log - conversion time, ticker, side,
+    qty, the average price the position was carried at, the mark (LTP) at
+    conversion, and the source (auto = bot's 15:05 gate, script = the
+    standalone tool). Oldest first."""
+    head = ('<tr><th>time</th><th>ticker</th><th>side</th><th>qty</th>'
+            '<th>avg</th><th>ltp</th><th>src</th></tr>')
+    rows = []
+    for r in read_delivery_log():
+        t = str(r.get("time", ""))
+        hm = t[11:16] if len(t) >= 16 else t
+        side = str(r.get("side", ""))
+        rows.append(
+            "<tr>"
+            f'<td>{html.escape(hm)}</td>'
+            f'<td>{html.escape(str(r.get("ticker") or r.get("tsym") or ""))}</td>'
+            f'<td class="side-{"buy" if side == "B" else "sell"}">{html.escape(side)}</td>'
+            f'<td class="num">{html.escape(str(r.get("qty", "")))}</td>'
+            f'<td class="num">{_num(r.get("avg_price"))}</td>'
+            f'<td class="num">{_num(r.get("ltp"))}</td>'
+            f'<td class="ordno">{html.escape(str(r.get("source", "")))}</td>'
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="7" class="empty">no conversions today</td></tr>')
+    return (
+        '<div class="sec">DELIVERED</div>'
+        f'<div class="scrollx"><table class="fills">{head}{"".join(rows)}</table></div>'
+    )
+
+
 def build_dashboard_html(figs, positions, fills):
     """Combine per-ticker figures into one page: a dropdown toggles which
     ticker's chart panel is visible. Selection is kept in localStorage so it
@@ -422,11 +454,16 @@ def build_dashboard_html(figs, positions, fills):
   .tab-panel > div {{ width: 100% !important; height: 100% !important; }}
   .divider {{ flex: 0 0 6px; cursor: col-resize; background: #2a2f37; }}
   .divider:hover {{ background: #3f79c2; }}
-  .logs {{ flex: 0 0 auto; width: 40vw; min-width: 220px; overflow: auto;
+  .logs {{ flex: 0 0 auto; width: 40vw; min-width: 220px; overflow: hidden;
            border-left: 1px solid #3a3f47; background: #0c0f12;
+           display: flex; flex-direction: column;
            font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+  .logs-main {{ flex: 7 1 0; min-height: 0; overflow: auto; }}
+  .logs-delivered {{ flex: 3 1 0; min-height: 0; overflow: auto;
+                     border-top: 2px solid #3a3f47; }}
   .logs .sec {{ color: #9aa4b0; font-weight: bold; letter-spacing: 0.05em;
                 background: #161b22; padding: 4px 10px; position: sticky; left: 0; }}
+  .logs-delivered .sec {{ color: #7fd6a0; top: 0; }}
   .scrollx {{ overflow-x: auto; }}
   table.fills {{ border-collapse: collapse; white-space: nowrap; }}
   table.fills th, table.fills td {{ padding: 2px 10px; border-bottom: 1px solid #1a1e24; text-align: left; }}
@@ -455,7 +492,12 @@ def build_dashboard_html(figs, positions, fills):
 </div>
 <div class="divider" id="divider"></div>
 <div class="logs" id="logs">
+<div class="logs-main">
 {build_panel_html(positions, fills)}
+</div>
+<div class="logs-delivered">
+{build_delivered_html()}
+</div>
 </div>
 </div>
 <script>

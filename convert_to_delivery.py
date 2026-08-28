@@ -120,11 +120,14 @@ def main():
     print(f"\nConverted {len(ok)}/{len(results)}:")
     for r in results:
         mark = "OK  " if r["ok"] else "FAIL"
-        print(f"  [{mark}] {r['tsym']:<20} {r['trantype']} x{r['qty']}")
+        avg = r.get("avg_price")
+        px = f"@ {avg}" if avg is not None else ""
+        print(f"  [{mark}] {r['tsym']:<20} {r['trantype']} x{r['qty']:<3} {px}")
     if bad:
         print(f"\n{len(bad)} FAILED - still intraday (check margin / broker terminal).")
         return 1
     print("\nAll open intraday positions converted to delivery.")
+    print("Logged to logs/delivery-<today>.log")
     return 0
 
 

@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 import boto3
 import requests
 
-from logger import event
+from logger import event, delivery_log
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -99,22 +99,20 @@ class KiteBroker:
                 return int(p["quantity"])
         return 0
 
-    def convert_to_delivery(self, ticker):
-        """Convert this ticker's open intraday (MIS) day position to delivery
-        (CNC). Side and qty are read from the live position (net qty sign:
-        +ve long -> BUY, -ve short -> SELL). Returns True if the conversion
-        call was accepted."""
-        sym = ticker.upper()
-        netqty = 0
-        for p in self.kite.positions()["day"]:
-            if p["tradingsymbol"] == sym and p["product"] == self.kite.PRODUCT_MIS:
-                netqty = int(p["quantity"])
-                break
+    def _convert_kite_pos(self, p, ticker=None, source="auto"):
+        """Convert one live MIS day position dict to CNC. On success writes a
+        delivery-log record (ticker, side, qty, avg entry price, LTP).
+        Returns (ok, avg_price)."""
+        sym = p["tradingsymbol"]
+        netqty = int(p.get("quantity", 0) or 0)
         if netqty == 0:
-            return False
+            return False, None
+        side = "B" if netqty > 0 else "S"
+        avg = round(float(p.get("average_price", 0) or 0), 2) or None
+        ltp = round(float(p.get("last_price", 0) or 0), 2) or None
         try:
             self.kite.convert_position(
-                exchange=self.kite.EXCHANGE_NSE,
+                exchange=p.get("exchange", self.kite.EXCHANGE_NSE),
                 tradingsymbol=sym,
                 transaction_type=(self.kite.TRANSACTION_TYPE_BUY if netqty > 0
                                   else self.kite.TRANSACTION_TYPE_SELL),
@@ -123,43 +121,44 @@ class KiteBroker:
                 old_product=self.kite.PRODUCT_MIS,
                 new_product=self.kite.PRODUCT_CNC,
             )
-            event(f"[kite] {ticker} converted "
-                  f"{'B' if netqty > 0 else 'S'} x{abs(netqty)} MIS -> CNC")
-            return True
         except Exception as e:
-            event(f"[kite] !! {ticker} convert_position failed: {e}")
-            return False
+            event(f"[kite] !! {ticker or sym} convert_position failed: {e}")
+            return False, avg
+        delivery_log({
+            "time": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
+            "ticker": ticker or sym,
+            "tsym": sym,
+            "side": side,
+            "qty": abs(netqty),
+            "avg_price": avg,
+            "ltp": ltp,
+            "source": source,
+        })
+        return True, avg
 
-    def convert_all_intraday(self):
+    def convert_to_delivery(self, ticker, source="auto"):
+        """Convert this ticker's open intraday (MIS) day position to delivery
+        (CNC). Returns True if the conversion call was accepted."""
+        sym = ticker.upper()
+        for p in self.kite.positions()["day"]:
+            if p["tradingsymbol"] == sym and p["product"] == self.kite.PRODUCT_MIS:
+                return self._convert_kite_pos(p, ticker=ticker, source=source)[0]
+        return False
+
+    def convert_all_intraday(self, source="script"):
         """Convert EVERY open intraday (MIS) day position to delivery (CNC).
-        Returns a list of {tsym, trantype, qty, ok} dicts."""
+        Returns a list of {tsym, trantype, qty, avg_price, ok} dicts."""
         results = []
         for p in self.kite.positions()["day"]:
             netqty = int(p.get("quantity", 0) or 0)
             if p.get("product") != self.kite.PRODUCT_MIS or netqty == 0:
                 continue
-            sym = p["tradingsymbol"]
-            try:
-                self.kite.convert_position(
-                    exchange=p.get("exchange", self.kite.EXCHANGE_NSE),
-                    tradingsymbol=sym,
-                    transaction_type=(self.kite.TRANSACTION_TYPE_BUY if netqty > 0
-                                      else self.kite.TRANSACTION_TYPE_SELL),
-                    position_type="day",
-                    quantity=abs(netqty),
-                    old_product=self.kite.PRODUCT_MIS,
-                    new_product=self.kite.PRODUCT_CNC,
-                )
-                event(f"[kite] {sym} converted "
-                      f"{'B' if netqty > 0 else 'S'} x{abs(netqty)} MIS -> CNC")
-                ok = True
-            except Exception as e:
-                event(f"[kite] !! {sym} convert_position failed: {e}")
-                ok = False
+            ok, avg = self._convert_kite_pos(p, source=source)
             results.append({
-                "tsym": sym,
+                "tsym": p["tradingsymbol"],
                 "trantype": "B" if netqty > 0 else "S",
                 "qty": abs(netqty),
+                "avg_price": avg,
                 "ok": ok,
             })
         return results
@@ -402,22 +401,44 @@ class NorenBroker:
                     pass
         return None
 
-    def _convert_intraday_leg(self, tsym, netqty, label=None):
-        """POST ProductConversion for one open intraday leg (prd I -> C).
-        Qty and side come from netqty (sign: +ve long -> 'B', -ve short ->
-        'S'), since ProductConversion takes no position id and matches on the
-        exch+tsym+prd+trantype tuple. The OK response carries no state, so
-        PositionBook is re-read (it can lag) to confirm the intraday leg is
+    @staticmethod
+    def _row_price(row, trantype):
+        """Best 'carried at' price for a PositionBook row: net average price,
+        falling back to the day buy/sell average for the leg's side. Returns
+        a rounded float or None."""
+        keys = ("netavgprc", "daybuyavgprc" if trantype == "B" else "daysellavgprc")
+        for k in keys:
+            v = row.get(k)
+            try:
+                if v not in (None, "", "NA"):
+                    return round(float(v), 2)
+            except (TypeError, ValueError):
+                pass
+        return None
+
+    def _convert_intraday_leg(self, row, label=None, source="auto"):
+        """POST ProductConversion for one open intraday PositionBook row
+        (prd I -> C). Qty and side come from netqty (sign: +ve long -> 'B',
+        -ve short -> 'S'), since ProductConversion takes no position id and
+        matches on the exch+tsym+prd+trantype tuple. On acceptance, writes a
+        delivery-log record with the price the position was carried at, then
+        re-reads PositionBook (it can lag) to confirm the intraday leg is
         gone. Returns True if the endpoint accepted it - on a lagging
         PositionBook it still returns True and logs VERIFY MANUALLY, because
         the alternative (caller treats it as failed) risks a later
         square-off dumping a position that is actually now delivery."""
+        tsym = row.get("tsym", "")
         name = label or tsym
-        netqty = int(netqty)
+        netqty = int(row.get("netqty", 0) or 0)
         if netqty == 0:
             return False
         trantype = "B" if netqty > 0 else "S"
         qty = abs(netqty)
+        avg_price = self._row_price(row, trantype)
+        try:
+            ltp = round(float(row.get("lp")), 2)
+        except (TypeError, ValueError):
+            ltp = None
         try:
             self._call("ProductConversion", {
                 "exch": "NSE",
@@ -433,40 +454,53 @@ class NorenBroker:
             event(f"[noren] !! {name} ProductConversion failed: {e}")
             return False
 
+        delivery_log({
+            "time": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
+            "ticker": name[:-3] if name.endswith("-EQ") else name,
+            "tsym": tsym,
+            "side": trantype,
+            "qty": qty,
+            "avg_price": avg_price,
+            "ltp": ltp,
+            "source": source,
+        })
+
         for _ in range(3):
             time.sleep(1)
             after = self._intraday_row(tsym)
-            if after is None or int(after.get("netqty", 0)) == 0:
-                event(f"[noren] {name} converted {trantype} x{qty} MIS -> DELIVERY")
+            if after is None or int(after.get("netqty", 0) or 0) == 0:
+                event(f"[noren] {name} converted {trantype} x{qty} "
+                      f"@ avg {avg_price} MIS -> DELIVERY")
                 return True
-        event(f"[noren] {name} conversion accepted but PositionBook still shows "
-              f"intraday - treating as done, VERIFY MANUALLY")
+        event(f"[noren] {name} conversion accepted (@ avg {avg_price}) but "
+              f"PositionBook still shows intraday - treating as done, VERIFY MANUALLY")
         return True
 
-    def convert_to_delivery(self, ticker):
+    def convert_to_delivery(self, ticker, source="auto"):
         """Convert one tracked ticker's open intraday position to delivery."""
         tsym = self.scrips[ticker]["tsym"]
         row = self._intraday_row(tsym)
         if row is None:
             return False
-        return self._convert_intraday_leg(tsym, row.get("netqty", 0), label=ticker)
+        return self._convert_intraday_leg(row, label=ticker, source=source)
 
-    def convert_all_intraday(self):
+    def convert_all_intraday(self, source="script"):
         """Convert EVERY open intraday position on the account to delivery -
         not just tracked tickers. Returns a list of
-        {tsym, trantype, qty, ok} dicts. Used by the standalone
+        {tsym, trantype, qty, avg_price, ok} dicts. Used by the standalone
         convert_to_delivery.py script."""
         rows = [p for p in self._call("PositionBook", tolerate_no_data=True, timeout=20)
                 if p.get("prd") == "I" and int(p.get("netqty", 0) or 0) != 0]
         results = []
         for p in rows:
             netqty = int(p["netqty"])
-            ok = self._convert_intraday_leg(p["tsym"], netqty)
+            trantype = "B" if netqty > 0 else "S"
             results.append({
                 "tsym": p["tsym"],
-                "trantype": "B" if netqty > 0 else "S",
+                "trantype": trantype,
                 "qty": abs(netqty),
-                "ok": ok,
+                "avg_price": self._row_price(p, trantype),
+                "ok": self._convert_intraday_leg(p, source=source),
             })
         return results
 
