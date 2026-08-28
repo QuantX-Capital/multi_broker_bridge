@@ -230,12 +230,15 @@ class NorenBroker:
 
     # ---------- transport ----------
 
-    def _call(self, endpoint, body=None, tolerate_no_data=False):
+    def _call(self, endpoint, body=None, tolerate_no_data=False, timeout=None):
         payload = {"uid": self.uid, "actid": self.actid, **(body or {})}
         data = f"jData={json.dumps(payload)}"
         headers = {"Authorization": f"Bearer {self.access_token}"}
 
-        response = requests.post(self.base_url + endpoint, data=data, headers=headers)
+        # timeout defaults to None (unchanged for the live bot's existing
+        # calls); callers that must not hang forever pass a value.
+        response = requests.post(self.base_url + endpoint, data=data,
+                                 headers=headers, timeout=timeout)
         response.raise_for_status()
         result = response.json()
 
@@ -374,7 +377,7 @@ class NorenBroker:
 
     def _intraday_row(self, tsym):
         """Raw PositionBook row for tsym with an intraday (prd='I') leg, or None."""
-        for p in self._call("PositionBook", tolerate_no_data=True):
+        for p in self._call("PositionBook", tolerate_no_data=True, timeout=20):
             if p.get("tsym") == tsym and p.get("prd") == "I":
                 return p
         return None
@@ -382,11 +385,14 @@ class NorenBroker:
     def delivery_cash(self):
         """Available cash for delivery (prd='C') per the Limits endpoint, or
         None if it can't be read. Informational only - logged before a
-        conversion so a later margin rejection has a breadcrumb."""
+        conversion so a later margin rejection has a breadcrumb. Never blocks:
+        the Limits endpoint has been seen to hang on this deployment, so this
+        is capped at a short timeout and any failure just returns None."""
         try:
-            lim = self._call("Limits", {"prd": "C", "seg": "EQT", "exch": "NSE"})
-        except NorenError as e:
-            event(f"[noren] Limits check errored ({e})")
+            lim = self._call("Limits", {"prd": "C", "seg": "EQT", "exch": "NSE"},
+                             timeout=10)
+        except Exception as e:
+            event(f"[noren] Limits check skipped ({e})")
             return None
         for k in ("cash", "cashmarginavailable", "marginused"):
             if k in lim:
@@ -422,8 +428,8 @@ class NorenBroker:
                 "trantype": trantype,
                 "postype": "Day",
                 "ordersource": "MOB",
-            })
-        except NorenError as e:
+            }, timeout=20)
+        except Exception as e:
             event(f"[noren] !! {name} ProductConversion failed: {e}")
             return False
 
@@ -450,7 +456,7 @@ class NorenBroker:
         not just tracked tickers. Returns a list of
         {tsym, trantype, qty, ok} dicts. Used by the standalone
         convert_to_delivery.py script."""
-        rows = [p for p in self._call("PositionBook", tolerate_no_data=True)
+        rows = [p for p in self._call("PositionBook", tolerate_no_data=True, timeout=20)
                 if p.get("prd") == "I" and int(p.get("netqty", 0) or 0) != 0]
         results = []
         for p in rows:

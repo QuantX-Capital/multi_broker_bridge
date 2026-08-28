@@ -69,7 +69,7 @@ def pick_broker(override=None):
 def list_open_intraday(name, broker):
     """Print current open intraday positions. Returns the count."""
     if name == "mastertrust":
-        rows = [p for p in broker._call("PositionBook", tolerate_no_data=True)
+        rows = [p for p in broker._call("PositionBook", tolerate_no_data=True, timeout=20)
                 if p.get("prd") == "I" and int(p.get("netqty", 0) or 0) != 0]
         items = [(p["tsym"], int(p["netqty"])) for p in rows]
     else:
@@ -100,7 +100,8 @@ def main():
     print(f"Broker: {name}")
 
     if name == "mastertrust":
-        cash = broker.delivery_cash()
+        print("Checking delivery cash (Limits)...", flush=True)
+        cash = broker.delivery_cash()   # capped at a short timeout; may be n/a
         print(f"Delivery cash (Limits): {cash if cash is not None else 'n/a'}")
 
     count = list_open_intraday(name, broker)
