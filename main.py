@@ -127,14 +127,27 @@ def fetch_historical_data(kite, instrument_token, interval="5minute", days=4):
     from_date = (datetime.now() - timedelta(days)).strftime("%Y-%m-%d")
     to_date = datetime.now().strftime("%Y-%m-%d")
 
-    candles = kite.historical_data(
-        instrument_token=instrument_token,
-        from_date=from_date,
-        to_date=to_date,
-        interval=interval,
-        continuous=False,
-        oi=False,
-    )
+    # Kite's historical-candle API is rate limited (~3 req/s). With many
+    # tickers primed back-to-back at startup (and systemd restarts stacking
+    # on top) it returns "Too many requests" - retry with exponential
+    # backoff rather than crashing the whole process.
+    for attempt in range(6):
+        try:
+            candles = kite.historical_data(
+                instrument_token=instrument_token,
+                from_date=from_date,
+                to_date=to_date,
+                interval=interval,
+                continuous=False,
+                oi=False,
+            )
+            break
+        except Exception as e:
+            if "too many requests" not in str(e).lower() or attempt == 5:
+                raise
+            wait = 2 ** attempt
+            print(f"[historical] {instrument_token} rate-limited, retry in {wait}s")
+            sleep(wait)
 
     df = pd.DataFrame(candles)
 
@@ -149,10 +162,10 @@ def fetch_historical_data(kite, instrument_token, interval="5minute", days=4):
 
 kite = load_kite_client()
 broker = make_broker(EXEC_BROKER, kite=kite, tickers=list(TICKERS.keys()))
-data = {
-    ticker: fetch_historical_data(kite, instrument_token=token, interval=interval)
-    for ticker, token in TICKERS.items()
-}
+data = {}
+for ticker, token in TICKERS.items():
+    data[ticker] = fetch_historical_data(kite, instrument_token=token, interval=interval)
+    sleep(0.35)   # stay under Kite's ~3 req/s historical-API limit
 for ticker, df in data.items():
     print(f"--- {ticker} ---")
     print(df.head())

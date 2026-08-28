@@ -1,4 +1,5 @@
 from datetime import datetime
+from time import sleep
 from zoneinfo import ZoneInfo
 import pandas as pd
 from fetch_historical_data import fetch_historical_data
@@ -30,6 +31,7 @@ class BarAggregator:
         for token, s in self.state.items():
             if s["historical_df"] is None:
                 s["historical_df"] = fetch_historical_data(kite, token, interval="5minute").iloc[:-1]
+                sleep(0.35)   # stay under Kite's ~3 req/s historical-API limit
 
     def create_bar(self, tick, kite):
         if "last_price" not in tick:

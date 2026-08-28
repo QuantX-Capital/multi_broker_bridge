@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime, timedelta
+from time import sleep
 from kiteconnect import KiteConnect
 import pandas as pd
 
@@ -24,14 +25,23 @@ def fetch_historical_data(kite, instrument_token, interval="5minute", days=4):
     from_date = (datetime.now() - timedelta(days)).strftime("%Y-%m-%d")
     to_date = datetime.now().strftime("%Y-%m-%d")
 
-    candles = kite.historical_data(
-        instrument_token=instrument_token,
-        from_date=from_date,
-        to_date=to_date,
-        interval=interval,
-        continuous=False,
-        oi=False,
-    )
+    # Kite's historical-candle API is rate limited (~3 req/s); retry with
+    # exponential backoff on "Too many requests" instead of raising.
+    for attempt in range(6):
+        try:
+            candles = kite.historical_data(
+                instrument_token=instrument_token,
+                from_date=from_date,
+                to_date=to_date,
+                interval=interval,
+                continuous=False,
+                oi=False,
+            )
+            break
+        except Exception as e:
+            if "too many requests" not in str(e).lower() or attempt == 5:
+                raise
+            sleep(2 ** attempt)
 
     df = pd.DataFrame(candles)
 
