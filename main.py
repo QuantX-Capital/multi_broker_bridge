@@ -42,10 +42,16 @@ CHARTS_DIR = Path(__file__).resolve().parent / "charts"
 # soon the open tab picks up a rewritten file.
 REFRESH_SECONDS = 60
 
+# At 15:05 convert any still-open intraday positions to delivery (MIS -> CNC),
+# so we carry them overnight instead of force-closing. Anything that fails to
+# convert is caught by the 15:10 square-off below.
+CONVERT_TIME = time(15, 5)
+
 # Exit everything ourselves ahead of the broker's own MIS auto square-off
 # (which can land anywhere in a ~15:15-15:25 window on a blunt market order
 # and cost real slippage/charges) so exits happen on our terms, earlier and
-# more predictably.
+# more predictably. Runs after CONVERT_TIME, so it only sees positions that
+# were NOT converted to delivery.
 SQUAREOFF_TIME = time(15, 10)
 
 interval = "5minute"
@@ -771,6 +777,29 @@ try:
 except webbrowser.Error:
     pass
 
+converted_today = False
+
+def convert_open_positions():
+    """At CONVERT_TIME, turn every tracked ticker's open intraday position
+    into a delivery holding (MIS -> CNC) so it carries overnight instead of
+    being force-closed at 15:10. Reads real broker positions, converts what's
+    open, and stops the strategy from taking new intraday entries afterwards.
+    A failed conversion leaves the position intraday - the 15:10 square-off
+    then closes it as before."""
+    global converted_today
+    converted_today = True
+    cash = getattr(broker, "delivery_cash", lambda: None)()
+    event(f"=== {CONVERT_TIME} convert-to-delivery "
+          f"(delivery cash={cash if cash is not None else 'n/a'}) ===")
+    for token, ticker in token_to_ticker.items():
+        strategies[token].enabled = False   # no new intraday entries after 15:05
+        if broker.net_position(ticker) == 0:
+            continue
+        if broker.convert_to_delivery(ticker):
+            strategies[token].enteries_taken = 0
+        else:
+            event(f"[{ticker}] not converted - leaving for 15:10 square-off")
+
 squared_off_today = False
 
 def square_off_all():
@@ -792,7 +821,11 @@ def square_off_all():
 def on_ticks(ws, ticks):
     updated = False
 
-    if not squared_off_today and datetime.now(tz=IST).time() >= SQUAREOFF_TIME:
+    now_t = datetime.now(tz=IST).time()
+    if not converted_today and now_t >= CONVERT_TIME:
+        convert_open_positions()
+        updated = True
+    if not squared_off_today and now_t >= SQUAREOFF_TIME:
         square_off_all()
         updated = True
 
