@@ -53,39 +53,31 @@ days = 3
 
 # ticker -> instrument_token. Add more entries here to trade multiple tickers at once.
 TICKERS = {
-    "WIPRO":     969473,
-    "TATASTEEL": 895745,
-    "ONGC":      633601,
     "JIOFIN":    4644609,
     "POWERGRID": 3834113,
     "ITC":       424961,
-    "TMPV":      884737,
     "ETERNAL":   1304833,
-    "NTPC":      2977281,
-    "COALINDIA": 5215745,
     "BEL":       98049,
-    "KOTAKBANK": 492033,
     "HDFCLIFE":  119553,
-    "HDFCBANK":  341249,
+    "RELIANCE":  738561,
+    "TMPV":      884737,
+    "HINDALCO":  348929,
+    "SBIN":      779521,
 }
 
 # per-ticker tranche size (quantity per entry/add). Falls back to 1 if a ticker
 # isn't listed here.
 QUANTITY = {
-    "WIPRO":     1,
-    "TATASTEEL": 1,
-    "ONGC":      1,
     "JIOFIN":    1,
     "POWERGRID": 1,
     "ITC":       1,
-    "TMPV":      1,
     "ETERNAL":   1,
-    "NTPC":      1,
-    "COALINDIA": 1,
     "BEL":       1,
-    "KOTAKBANK": 1,
     "HDFCLIFE":  1,
-    "HDFCBANK":  1,
+    "RELIANCE":  1,
+    "TMPV":      1,
+    "HINDALCO":  1,
+    "SBIN":      1,
 }
 
 
