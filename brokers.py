@@ -163,6 +163,28 @@ class KiteBroker:
             })
         return results
 
+    def delivery_holdings(self, tickers):
+        """Current delivery (CNC) stock for `tickers` - CNC day positions
+        plus the demat holdings book. {ticker: {'qty': int,
+        'avg_price': float|None}}."""
+        want = {t.upper() for t in tickers}
+        out = {}
+        for p in self.kite.positions()["day"]:
+            if p.get("product") != self.kite.PRODUCT_CNC:
+                continue
+            sym = p["tradingsymbol"]
+            q = int(p.get("quantity", 0) or 0)
+            if sym in want and q:
+                out[sym] = {"qty": q,
+                            "avg_price": round(float(p.get("average_price", 0) or 0), 2) or None}
+        for h in self.kite.holdings():
+            sym = h.get("tradingsymbol", "")
+            q = int(h.get("quantity", 0) or 0)
+            if sym in want and q and sym not in out:
+                out[sym] = {"qty": q,
+                            "avg_price": round(float(h.get("average_price", 0) or 0), 2) or None}
+        return out
+
     def trades(self):
         """Today's fills, normalized to the shared shape:
             {tsym, transaction_type, fill_timestamp, exchange_time,
@@ -503,6 +525,28 @@ class NorenBroker:
                 "ok": self._convert_intraday_leg(p, source=source),
             })
         return results
+
+    def delivery_holdings(self, tickers):
+        """Current delivery (prd='C') stock for `tickers` (plain symbols, no
+        -EQ), read from the PositionBook - covers same-day conversions and
+        carry-forward positions. Returns {ticker: {'qty': int,
+        'avg_price': float|None}} for tickers actually held. Stock that has
+        settled into the demat holdings book is not reflected here."""
+        want = {t.upper() for t in tickers}
+        out = {}
+        for p in self._call("PositionBook", tolerate_no_data=True, timeout=20):
+            if p.get("prd") != "C":
+                continue
+            sym = p.get("tsym", "")
+            base = sym[:-3] if sym.endswith("-EQ") else sym
+            if base not in want:
+                continue
+            q = int(p.get("netqty", 0) or 0)
+            if q == 0:
+                continue
+            out[base] = {"qty": q,
+                         "avg_price": self._row_price(p, "B" if q > 0 else "S")}
+        return out
 
     def trades(self):
         """Today's fills, normalized to the shared shape:

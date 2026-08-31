@@ -382,39 +382,51 @@ def build_panel_html(positions, fills):
     )
 
 
-def build_delivered_html():
-    """Bottom 30% of the side panel: today's intraday -> delivery conversions
-    read from logs/delivery-YYYY-MM-DD.log - conversion time, ticker, side,
-    qty, the average price the position was carried at, the mark (LTP) at
-    conversion, and the source (auto = bot's 15:05 gate, script = the
-    standalone tool). Oldest first."""
-    head = ('<tr><th>time</th><th>ticker</th><th>side</th><th>qty</th>'
-            '<th>avg</th><th>ltp</th><th>src</th></tr>')
+def build_delivered_html(delivered):
+    """Bottom 30% of the side panel: delivery (CNC) stock for the tracked
+    tickers only. One row per tracked ticker currently held as delivery -
+    from the broker (`delivered`, so it persists across days) - merged with
+    the day's conversion log (logs/delivery-YYYY-MM-DD.log) for the
+    conversion time and source when it was converted today. `since` shows
+    that HH:MM, or 'carried' for a holding from an earlier day."""
+    tracked = set(TICKERS)
+    today = {r["ticker"]: r for r in read_delivery_log()
+             if r.get("ticker") in tracked}
+    head = ('<tr><th>ticker</th><th>side</th><th>qty</th><th>avg</th>'
+            '<th>ltp</th><th>since</th></tr>')
     rows = []
-    for r in read_delivery_log():
+    for tk in sorted(set(delivered) | set(today)):
+        d = delivered.get(tk, {})
+        r = today.get(tk, {})
+        qty = d.get("qty")
+        if qty is None:
+            qty = r.get("qty", 0)
+        qty = int(qty or 0)
+        side = "B" if qty >= 0 else "S"
+        avg = d.get("avg_price")
+        if avg is None:
+            avg = r.get("avg_price")
         t = str(r.get("time", ""))
-        hm = t[11:16] if len(t) >= 16 else t
-        side = str(r.get("side", ""))
+        since = t[11:16] if len(t) >= 16 else "carried"
         rows.append(
             "<tr>"
-            f'<td>{html.escape(hm)}</td>'
-            f'<td>{html.escape(str(r.get("ticker") or r.get("tsym") or ""))}</td>'
-            f'<td class="side-{"buy" if side == "B" else "sell"}">{html.escape(side)}</td>'
-            f'<td class="num">{html.escape(str(r.get("qty", "")))}</td>'
-            f'<td class="num">{_num(r.get("avg_price"))}</td>'
+            f'<td>{html.escape(tk)}</td>'
+            f'<td class="side-{"buy" if side == "B" else "sell"}">{side}</td>'
+            f'<td class="num">{abs(qty)}</td>'
+            f'<td class="num">{_num(avg)}</td>'
             f'<td class="num">{_num(r.get("ltp"))}</td>'
-            f'<td class="ordno">{html.escape(str(r.get("source", "")))}</td>'
+            f'<td class="ordno">{html.escape(since)}</td>'
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="7" class="empty">no conversions today</td></tr>')
+        rows.append('<tr><td colspan="6" class="empty">no delivery holdings</td></tr>')
     return (
         '<div class="sec">DELIVERED</div>'
         f'<div class="scrollx"><table class="fills">{head}{"".join(rows)}</table></div>'
     )
 
 
-def build_dashboard_html(figs, positions, fills):
+def build_dashboard_html(figs, positions, fills, delivered):
     """Combine per-ticker figures into one page: a dropdown toggles which
     ticker's chart panel is visible. Selection is kept in localStorage so it
     survives the page's own auto-refresh (meta refresh reloads the whole
@@ -496,7 +508,7 @@ def build_dashboard_html(figs, positions, fills):
 {build_panel_html(positions, fills)}
 </div>
 <div class="logs-delivered">
-{build_delivered_html()}
+{build_delivered_html(delivered)}
 </div>
 </div>
 </div>
@@ -561,12 +573,13 @@ function showTicker(ticker) {{
 </html>"""
 
 
-def write_dashboard_html(figs, positions, fills):
+def write_dashboard_html(figs, positions, fills, delivered):
     """Overwrite the combined dashboard file. The already-open browser tab
     picks up the new content on its next auto-refresh (see REFRESH_SECONDS)."""
     CHARTS_DIR.mkdir(exist_ok=True)
     path = CHARTS_DIR / "dashboard.html"
-    path.write_text(build_dashboard_html(figs, positions, fills), encoding="utf-8")
+    path.write_text(build_dashboard_html(figs, positions, fills, delivered),
+                    encoding="utf-8")
     return path
 
 
@@ -792,6 +805,16 @@ def fetch_fills():
         print(f"[dashboard] trades() failed: {e}")
         return []
 
+def fetch_delivery_holdings():
+    """Current delivery (CNC) stock for the tracked tickers, from the broker.
+    {} on any error - the DELIVERED panel then falls back to the day's
+    conversion log alone."""
+    try:
+        return broker.delivery_holdings(TICKERS.keys())
+    except Exception as e:
+        print(f"[dashboard] delivery_holdings() failed: {e}")
+        return {}
+
 def refresh_dashboard():
     """Rebuild every ticker's chart from current state and rewrite the
     combined dashboard file."""
@@ -806,8 +829,9 @@ def refresh_dashboard():
         dfs[ticker] = df
         figs[ticker] = make_candle_fig(df, ticker, log=trade_markers[ticker])
     positions = fetch_positions_book()
+    delivered = fetch_delivery_holdings()
     enrich_fills_with_bands(fills, dfs)
-    return write_dashboard_html(figs, positions, fills)
+    return write_dashboard_html(figs, positions, fills, delivered)
 
 # seed the dashboard up front. Locally this opens a browser tab that then
 # auto-refreshes (REFRESH_SECONDS) and picks up rewrites below; on a headless
