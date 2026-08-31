@@ -12,6 +12,8 @@ one path that places orders (see below).
     python account_status.py                    # active broker from config.json
     python account_status.py --broker mastertrust
     python account_status.py --broker zerodha
+    python account_status.py --orders            # today's order book, status per order
+    python account_status.py --all-delivery      # full-account delivery book, tagged
     python account_status.py --exit-all          # DRY RUN: show exit plan only
     python account_status.py --exit-all --yes    # place the exit orders, then
                                                   # re-check what's left open
@@ -139,6 +141,69 @@ def show_intraday(name, broker):
         print(f"  {ticker:<12} {side} {abs(qty)}")
     if not any_open:
         print("  none - flat on all tracked tickers")
+
+
+# ---------- order status (read-only, no orders placed) ----------
+
+def show_orders(name, broker):
+    """Today's order book for the tracked tickers, split into delivery
+    (CNC/prd=C) and intraday (MIS/prd=I) orders - status, filled qty, avg
+    price, reject reason if any. Read-only: places or modifies nothing.
+    Use this to see what an order actually did (filled / rejected / still
+    open) rather than inferring it from the resulting position."""
+    print("\n=== ORDER STATUS (today) ===")
+    tracked = set(TICKERS)
+
+    if name == "zerodha":
+        k = broker.kite
+        try:
+            orders = k.orders()
+        except Exception as e:
+            print(f"  could not read order book: {e}")
+            return
+        rows = [o for o in orders if o.get("tradingsymbol", "").upper() in tracked]
+        delivery = [o for o in rows if o.get("product") == k.PRODUCT_CNC]
+        intraday = [o for o in rows if o.get("product") == k.PRODUCT_MIS]
+
+        def _p(o):
+            print(f"  {o.get('tradingsymbol'):<12} {o.get('transaction_type'):<4} "
+                  f"qty={o.get('quantity')} filled={o.get('filled_quantity')} "
+                  f"avg={o.get('average_price')} status={o.get('status')} "
+                  f"{o.get('status_message') or ''} id={o.get('order_id')}")
+    else:
+        try:
+            book = broker._call("OrderBook", tolerate_no_data=True, timeout=20)
+        except Exception as e:
+            print(f"  could not read order book: {e}")
+            return
+        rows = []
+        for o in book:
+            tsym = o.get("tsym", "")
+            base = tsym[:-3] if tsym.endswith("-EQ") else tsym
+            if base.upper() in tracked:
+                rows.append(o)
+        delivery = [o for o in rows if o.get("prd") == "C"]
+        intraday = [o for o in rows if o.get("prd") == "I"]
+
+        def _p(o):
+            filled = o.get("fillshares") or o.get("flqty") or 0
+            print(f"  {o.get('tsym'):<14} {o.get('trantype'):<4} "
+                  f"qty={o.get('qty')} filled={filled} avg={o.get('avgprc')} "
+                  f"status={o.get('status')} {o.get('rejreason', '')} id={o.get('norenordno')}")
+
+    print("\n  -- DELIVERY (holding account) ORDERS --")
+    if delivery:
+        for o in delivery:
+            _p(o)
+    else:
+        print("  none today")
+
+    print("\n  -- INTRADAY ORDERS --")
+    if intraday:
+        for o in intraday:
+            _p(o)
+    else:
+        print("  none today")
 
 
 # ---------- full-account delivery book (not just the tracked tickers) ----------
@@ -330,6 +395,9 @@ def main():
     ap.add_argument("--all-delivery", action="store_true",
                     help="also show every CNC/delivery holding on the whole account "
                          "(not just the tracked tickers), tagged tracked/untracked - read-only")
+    ap.add_argument("--orders", action="store_true",
+                    help="also show today's order book for the tracked tickers, split "
+                         "into delivery/holding and intraday, with status per order - read-only")
     args = ap.parse_args()
 
     name, broker = pick_broker(args.broker)
@@ -342,6 +410,8 @@ def main():
 
     if args.all_delivery:
         show_all_delivery(name, broker)
+    if args.orders:
+        show_orders(name, broker)
 
     if args.exit_all:
         exit_all(name, broker, confirm=args.yes)
