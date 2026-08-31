@@ -61,6 +61,16 @@ def _fetch_secret(secret_id, profile=None, region=None):
     return json.loads(response["SecretString"])
 
 
+def _num_or(v, default):
+    """round(float(v), 2), or `default` for None / '' / 'NA' / non-numeric."""
+    try:
+        if v in (None, "", "NA"):
+            return default
+        return round(float(v), 2)
+    except (TypeError, ValueError):
+        return default
+
+
 class NorenError(RuntimeError):
     pass
 
@@ -526,26 +536,58 @@ class NorenBroker:
             })
         return results
 
+    @staticmethod
+    def _base_sym(tsym):
+        return tsym[:-3] if tsym.endswith("-EQ") else tsym
+
     def delivery_holdings(self, tickers):
-        """Current delivery (prd='C') stock for `tickers` (plain symbols, no
-        -EQ), read from the PositionBook - covers same-day conversions and
-        carry-forward positions. Returns {ticker: {'qty': int,
-        'avg_price': float|None}} for tickers actually held. Stock that has
-        settled into the demat holdings book is not reflected here."""
+        """Current delivery stock for `tickers` (plain symbols, no -EQ),
+        merged from two sources, each best-effort (a broker hiccup on one
+        just means that source contributes nothing):
+
+          * PositionBook rows with prd='C' - same-day converts and
+            carry-forward CNC positions, not yet settled
+          * the Holdings book              - stock settled into demat
+
+        Returns {ticker: {'qty': int, 'avg_price': float|None}} for tickers
+        actually held. PositionBook wins where a ticker is in both."""
         want = {t.upper() for t in tickers}
         out = {}
-        for p in self._call("PositionBook", tolerate_no_data=True, timeout=20):
-            if p.get("prd") != "C":
-                continue
-            sym = p.get("tsym", "")
-            base = sym[:-3] if sym.endswith("-EQ") else sym
-            if base not in want:
-                continue
-            q = int(p.get("netqty", 0) or 0)
-            if q == 0:
-                continue
-            out[base] = {"qty": q,
-                         "avg_price": self._row_price(p, "B" if q > 0 else "S")}
+
+        try:
+            for p in self._call("PositionBook", tolerate_no_data=True, timeout=20):
+                if p.get("prd") != "C":
+                    continue
+                base = self._base_sym(p.get("tsym", ""))
+                q = int(p.get("netqty", 0) or 0)
+                if base in want and q:
+                    out[base] = {"qty": q,
+                                 "avg_price": self._row_price(p, "B" if q > 0 else "S")}
+        except Exception as e:
+            event(f"[noren] delivery PositionBook read failed: {e}")
+
+        if getattr(self, "_holdings_ok", True):
+            try:
+                book = self._call("Holdings", {"prd": "C"},
+                                  tolerate_no_data=True, timeout=12)
+                for h in (book if isinstance(book, list) else []):
+                    base = next((self._base_sym(s.get("tsym", ""))
+                                 for s in (h.get("exch_tsym") or [])
+                                 if self._base_sym(s.get("tsym", "")) in want), None)
+                    if not base or base in out:
+                        continue
+                    hold = max((_num_or(h.get(k), 0) for k in
+                                ("holdqty", "dpqty", "npoadqty")), default=0)
+                    qty = int(hold) - int(_num_or(h.get("usedqty"), 0))
+                    if qty > 0:
+                        out[base] = {"qty": qty, "avg_price": _num_or(h.get("upldprc"), None)}
+            except Exception as e:
+                # Holdings has been seen to hang on this deployment - after a
+                # failure, stop calling it for the rest of the session so it
+                # doesn't add a timeout to every dashboard rebuild.
+                self._holdings_ok = False
+                event(f"[noren] Holdings read failed, disabling for session ({e})")
+
         return out
 
     def trades(self):
