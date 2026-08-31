@@ -66,9 +66,9 @@ TICKERS = {
     "BEL":       98049,
     "HDFCLIFE":  119553,
     "RELIANCE":  738561,
-    "TMPV":      884737,
-    "HINDALCO":  348929,
-    "SBIN":      779521,
+    "TMPV":       884737,
+    "HINDALCO":   348929,
+    "BAJFINANCE": 81153,
 }
 
 # per-ticker tranche size (quantity per entry/add). Falls back to 1 if a ticker
@@ -81,9 +81,9 @@ QUANTITY = {
     "BEL":       1,
     "HDFCLIFE":  1,
     "RELIANCE":  1,
-    "TMPV":      1,
-    "HINDALCO":  1,
-    "SBIN":      1,
+    "TMPV":       1,
+    "HINDALCO":   1,
+    "BAJFINANCE": 1,
 }
 
 
