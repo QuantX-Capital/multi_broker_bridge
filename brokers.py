@@ -275,7 +275,7 @@ class NorenBroker:
 
     def _resolve_scrip(self, ticker):
         tsym = f"{ticker.upper()}-EQ"
-        result = self._call("SearchScrip", {"stext": tsym, "exch": "NSE"})
+        result = self._call("SearchScrip", {"stext": tsym, "exch": "NSE"}, timeout=20)
         for scrip in result.get("values", []):
             if scrip.get("tsym") == tsym and scrip.get("exch") == "NSE":
                 return {"tsym": tsym, "token": scrip["token"],
@@ -290,7 +290,7 @@ class NorenBroker:
 
     def _ltp(self, ticker):
         scrip = self.scrips[ticker]
-        quote = self._call("GetQuotes", {"exch": "NSE", "token": scrip["token"]})
+        quote = self._call("GetQuotes", {"exch": "NSE", "token": scrip["token"]}, timeout=15)
         return float(quote["lp"])
 
     def _marketable_price(self, ticker, side):
@@ -311,7 +311,7 @@ class NorenBroker:
             result = self._call("GetOrderMargin", {
                 "exch": "NSE", "tsym": scrip["tsym"], "qty": str(qty),
                 "prc": str(price), "prd": "I", "trantype": "B", "prctyp": "LMT",
-            })
+            }, timeout=15)
         except NorenError as e:
             # a broken pre-check should not block trading; log and proceed
             event(f"[noren] {ticker} margin pre-check errored ({e}), proceeding")
@@ -361,7 +361,7 @@ class NorenBroker:
             time.sleep(FILL_POLL_SLEEP)
             try:
                 result = self._call("SingleOrdStatus",
-                                    {"norenordno": norenordno, "exch": "NSE"})
+                                    {"norenordno": norenordno, "exch": "NSE"}, timeout=15)
                 entry = result[0] if isinstance(result, list) else result
                 status = entry.get("status")
             except NorenError as e:
@@ -390,7 +390,7 @@ class NorenBroker:
 
     def net_position(self, ticker):
         scrip = self.scrips[ticker]
-        book = self._call("PositionBook", tolerate_no_data=True)
+        book = self._call("PositionBook", tolerate_no_data=True, timeout=20)
         for p in book:
             if p.get("tsym") == scrip["tsym"] and p.get("prd") == "I":
                 return int(p.get("netqty", 0))
@@ -560,7 +560,7 @@ class NorenBroker:
         aliases (flprc/avgprc/prc, flqty/qty/fillshares). Verify against one
         real TradeBook row if a column shows blank; a missing key degrades to
         0/None rather than raising."""
-        book = self._call("TradeBook", tolerate_no_data=True)
+        book = self._call("TradeBook", tolerate_no_data=True, timeout=20)
 
         def _first(d, *keys):
             for k in keys:
@@ -597,7 +597,7 @@ class NorenBroker:
         like trades(), Mastertrust's build can vary a little - verify
         against one real PositionBook row if a column looks off and adjust
         the keys below."""
-        book = self._call("PositionBook", tolerate_no_data=True)
+        book = self._call("PositionBook", tolerate_no_data=True, timeout=20)
 
         def _f(d, key, alt=None):
             v = d.get(key)
