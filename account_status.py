@@ -5,12 +5,16 @@ Prints, for the active broker (config.json "brokers"):
   * delivery (CNC) holdings for the tracked tickers
   * current intraday (MIS / prd=I) positions for the tracked tickers
 
-Places no orders and imports nothing from main.py - only the shared
-brokers.py module, same as convert_to_delivery.py.
+Read-only by default and imports nothing from main.py - only the shared
+brokers.py module, same as convert_to_delivery.py. --exit-all --yes is the
+one path that places orders (see below).
 
     python account_status.py                    # active broker from config.json
     python account_status.py --broker mastertrust
     python account_status.py --broker zerodha
+    python account_status.py --exit-all          # DRY RUN: show exit plan only
+    python account_status.py --exit-all --yes    # place the exit orders, then
+                                                  # re-check what's left open
 
 Credentials:
   * mastertrust -> AWS Secrets Manager, same as the live bot (brokers.py)
@@ -22,9 +26,10 @@ Credentials:
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
-from brokers import NorenBroker, KiteBroker
+from brokers import NorenBroker, KiteBroker, _num_or
 
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 
@@ -136,10 +141,195 @@ def show_intraday(name, broker):
         print("  none - flat on all tracked tickers")
 
 
+# ---------- full-account delivery book (not just the tracked tickers) ----------
+
+def show_all_delivery(name, broker):
+    """Every CNC/delivery holding on the whole account, tagged as tracked or
+    untracked - so you can verify exit_all() only ever touched TICKERS and
+    nothing else on the account moved. brokers.py's delivery_holdings() takes
+    a ticker filter and can't answer this, so this reaches into the broker
+    directly (mirrors delivery_holdings()'s own logic, just unfiltered)."""
+    print("\n=== ALL DELIVERY (CNC) HOLDINGS ON ACCOUNT ===")
+    out = {}
+    tracked = set(TICKERS)
+
+    if name == "zerodha":
+        k = broker.kite
+        try:
+            for p in k.positions()["day"]:
+                if p.get("product") != k.PRODUCT_CNC:
+                    continue
+                q = int(p.get("quantity", 0) or 0)
+                if q:
+                    out[p["tradingsymbol"]] = {
+                        "qty": q,
+                        "avg_price": round(float(p.get("average_price", 0) or 0), 2) or None,
+                    }
+        except Exception as e:
+            print(f"  could not read CNC day positions: {e}")
+        try:
+            for h in k.holdings():
+                sym = h.get("tradingsymbol", "")
+                q = int(h.get("quantity", 0) or 0)
+                if q and sym not in out:
+                    out[sym] = {
+                        "qty": q,
+                        "avg_price": round(float(h.get("average_price", 0) or 0), 2) or None,
+                    }
+        except Exception as e:
+            print(f"  could not read holdings: {e}")
+    else:
+        try:
+            for p in broker._call("PositionBook", tolerate_no_data=True, timeout=20):
+                if p.get("prd") != "C":
+                    continue
+                q = int(p.get("netqty", 0) or 0)
+                if q:
+                    out[p.get("tsym", "")] = {
+                        "qty": q,
+                        "avg_price": broker._row_price(p, "B" if q > 0 else "S"),
+                    }
+        except Exception as e:
+            print(f"  could not read PositionBook: {e}")
+        try:
+            book = broker._call("Holdings", {"prd": "C"}, tolerate_no_data=True, timeout=12)
+            for h in (book if isinstance(book, list) else []):
+                exch = h.get("exch_tsym") or []
+                sym = exch[0].get("tsym", "") if exch else ""
+                if not sym or sym in out:
+                    continue
+                hold = max((_num_or(h.get(k2), 0) for k2 in ("holdqty", "dpqty", "npoadqty")), default=0)
+                qty = int(hold) - int(_num_or(h.get("usedqty"), 0))
+                if qty > 0:
+                    out[sym] = {"qty": qty, "avg_price": _num_or(h.get("upldprc"), None)}
+        except Exception as e:
+            print(f"  could not read Holdings: {e}")
+
+    if not out:
+        print("  none")
+        return out
+
+    for sym in sorted(out):
+        base = sym[:-3] if sym.endswith("-EQ") else sym
+        d = out[sym]
+        qty = d["qty"]
+        side = "LONG " if qty >= 0 else "SHORT"
+        tag = "" if base.upper() in tracked else "  <- UNTRACKED (never touched by exit_all)"
+        print(f"  {sym:<14} {side} {abs(qty):<6} avg={d.get('avg_price')}{tag}")
+    return out
+
+
+# ---------- exit everything ----------
+
+def exit_delivery_leg(name, broker, ticker, qty):
+    """Place one CNC/delivery exit order. qty > 0 sells a long delivery
+    holding; qty < 0 buys to cover a delivery short. Returns the order id,
+    or None if the broker didn't return one.
+
+    brokers.py has no public delivery-sell method (buy/sell there are always
+    intraday), so this reaches into each broker's underlying client directly
+    - same as show_balance() already does via broker._call()."""
+    if name == "zerodha":
+        k = broker.kite
+        txn = k.TRANSACTION_TYPE_SELL if qty > 0 else k.TRANSACTION_TYPE_BUY
+        return k.place_order(
+            variety=k.VARIETY_REGULAR,
+            exchange=k.EXCHANGE_NSE,
+            tradingsymbol=ticker.upper(),
+            transaction_type=txn,
+            quantity=abs(qty),
+            product=k.PRODUCT_CNC,
+            order_type=k.ORDER_TYPE_MARKET,
+            validity=k.VALIDITY_DAY,
+            market_protection=-1,
+        )
+    else:
+        side = "S" if qty > 0 else "B"
+        price = broker._marketable_price(ticker, side)
+        result = broker._call("PlaceOrder", {
+            "exch": "NSE",
+            "tsym": broker.scrips[ticker]["tsym"],
+            "qty": str(abs(qty)),
+            "prc": str(price),
+            "prd": "C",
+            "trantype": side,
+            "prctyp": "LMT",
+            "ret": "DAY",
+        })
+        return result.get("norenordno")
+
+
+def exit_all(name, broker, confirm):
+    """Exit every open intraday and delivery position for the tracked
+    tickers. Dry run by default (prints the plan, sends nothing) - pass
+    confirm=True (--yes) to actually place the orders."""
+    print("\n=== EXIT ALL (intraday + delivery) ===")
+
+    try:
+        delivered = broker.delivery_holdings(TICKERS)
+    except Exception as e:
+        print(f"  could not read delivery holdings: {e}")
+        delivered = {}
+
+    plan = []   # (ticker, leg, qty) - qty > 0 long, qty < 0 short
+    for ticker in TICKERS:
+        try:
+            iq = broker.net_position(ticker)
+        except Exception as e:
+            print(f"  {ticker:<12} could not read intraday position ({e})")
+            iq = 0
+        if iq:
+            plan.append((ticker, "intraday", iq))
+        d = delivered.get(ticker)
+        if d and d.get("qty"):
+            plan.append((ticker, "delivery", int(d["qty"])))
+
+    if not plan:
+        print("  nothing to exit - flat on all tracked tickers")
+        return
+
+    tag = "[LIVE]" if confirm else "[DRY] "
+    for ticker, leg, qty in plan:
+        action = "SELL" if qty > 0 else "BUY (cover)"
+        print(f"  {tag} {ticker:<12} {leg:<9} {action} {abs(qty)}")
+
+    if not confirm:
+        print("\n  DRY RUN - nothing sent. Re-run with --exit-all --yes to place these orders.")
+        return
+
+    print("\n  placing orders...")
+    for ticker, leg, qty in plan:
+        try:
+            if leg == "intraday":
+                order_id = broker.sell(ticker, qty) if qty > 0 else broker.buy(ticker, abs(qty))
+            else:
+                order_id = exit_delivery_leg(name, broker, ticker, qty)
+            print(f"  {ticker:<12} {leg:<9} -> order {order_id or 'FAILED / no order id'}")
+        except Exception as e:
+            print(f"  {ticker:<12} {leg:<9} -> ERROR: {e}")
+
+    # Broker position/holdings reads can lag a couple seconds behind a
+    # just-placed order (same reason NorenBroker._convert_intraday_leg polls
+    # before trusting PositionBook) - give it a moment before re-checking.
+    print("\n  waiting for the broker to reflect fills...")
+    time.sleep(3)
+    print("\n=== POSITIONS AFTER EXIT ===")
+    show_intraday(name, broker)
+    show_all_delivery(name, broker)
+
+
 def main():
-    ap = argparse.ArgumentParser(description="Read-only account/position check (no orders placed).")
+    ap = argparse.ArgumentParser(description="Account/position check, with an optional exit-all (no orders placed by default).")
     ap.add_argument("--broker", choices=["mastertrust", "noren", "zerodha", "kite"],
                     help="override the broker from config.json")
+    ap.add_argument("--exit-all", action="store_true",
+                    help="exit every open intraday and delivery position for the tracked tickers "
+                         "(dry run unless --yes is also given)")
+    ap.add_argument("--yes", action="store_true",
+                    help="with --exit-all, actually place the exit orders instead of a dry run")
+    ap.add_argument("--all-delivery", action="store_true",
+                    help="also show every CNC/delivery holding on the whole account "
+                         "(not just the tracked tickers), tagged tracked/untracked - read-only")
     args = ap.parse_args()
 
     name, broker = pick_broker(args.broker)
@@ -149,6 +339,13 @@ def main():
     show_balance(name, broker)
     show_delivery(name, broker)
     show_intraday(name, broker)
+
+    if args.all_delivery:
+        show_all_delivery(name, broker)
+
+    if args.exit_all:
+        exit_all(name, broker, confirm=args.yes)
+
     print()
     return 0
 
