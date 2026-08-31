@@ -4,3 +4,4 @@ charts/
 logs/
 *_bar_log_*.csv
 *.ipynb
+account_status.py
